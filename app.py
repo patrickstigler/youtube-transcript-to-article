@@ -1,5 +1,5 @@
 from flask import Flask, request, jsonify, render_template
-from youtube_transcript_api import YouTubeTranscriptApi
+from youtube_transcript_api import YouTubeTranscriptApi, NoTranscriptFound
 import openai
 import os
 
@@ -9,7 +9,18 @@ app = Flask(__name__)
 openai.api_key = os.getenv("OPENAI_API_KEY")
 
 def get_transcript(video_id, target_lang=None):
-    transcript = YouTubeTranscriptApi.get_transcript(video_id)
+    try:
+        # Try to get the transcript in the target language or default language
+        transcript = YouTubeTranscriptApi.get_transcript(video_id, languages=[target_lang] if target_lang else None)
+    except NoTranscriptFound:
+        # If the preferred language transcript is not found, fall back to available languages
+        transcript_list = YouTubeTranscriptApi.list_transcripts(video_id)
+        available_languages = [transcript.language_code for transcript in transcript_list]
+        
+        # Select the first available language if no preferred language is found
+        transcript = YouTubeTranscriptApi.get_transcript(video_id, languages=available_languages)
+
+    # Join all the pieces of transcript text
     text = " ".join([t['text'] for t in transcript])
     return text
 
@@ -34,7 +45,7 @@ def generate():
     detail_level = data.get('detail_level', 'short')
     target_lang = data.get('target_lang', None)
     
-    transcript = get_transcript(video_id)
+    transcript = get_transcript(video_id, target_lang)
     article = generate_article(transcript, detail_level, target_lang)
     
     return jsonify({"article": article})
