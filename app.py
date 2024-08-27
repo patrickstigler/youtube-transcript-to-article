@@ -38,13 +38,16 @@ def generate_article(transcript, detail_level="summary", target_lang=None):
     if target_lang:
         prompt += f"\n\nWrite the article in {target_lang}."
     
-    response = openai.Completion.create(
-        engine="text-davinci-003",
-        prompt=prompt,
+    response = openai.ChatCompletion.create(
+        model="gpt-3.5-turbo",
+        messages=[
+            {"role": "system", "content": "You are a helpful assistant."},
+            {"role": "user", "content": prompt}
+        ],
         max_tokens=500 if detail_level == "summary" else 1500,
         temperature=0.7
     )
-    return response.choices[0].text.strip()
+    return response['choices'][0]['message']['content'].strip()
 
 @app.route('/api/generate', methods=['POST'])
 def generate():
