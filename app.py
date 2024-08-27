@@ -29,14 +29,14 @@ def get_transcript(video_id, target_lang=None):
 
 def generate_article(transcript, detail_level="summary", target_lang=None):
     assistant = client.beta.assistants.create(
-        name="Article Generator",
-        instructions="You are a professional article writer. Generate a concise or detailed article based on the provided transcript.",
+        name="Article Author",
+        instructions="You are a professional article author. Generate a concise or detailed article based on the provided transcript.",
         model="gpt-4-1106-preview",
     )
 
     thread = client.beta.threads.create()
 
-    message_content = f"Write a {'detailed' if detail_level == 'detailed' else 'brief'} professional article based on this transcript:\n\n{transcript}"
+    message_content = f"Write a {'detailed professional article' if detail_level == 'detailed' else 'brief summary'} based on this transcript:\n\n{transcript}"
     if target_lang:
         message_content += f"\n\nWrite the article in {target_lang}."
 
