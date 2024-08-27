@@ -11,6 +11,28 @@
 - **Minimalist Web Interface**: Provides a simple, user-friendly web interface to easily input video IDs or URLs and generate articles.
 - **Dockerized Deployment**: Easy deployment with Docker, including integration options for Home Assistant.
 
+## Docker Image and Installation
+
+The Docker image for this project is available on Docker Hub:
+
+- **Docker Hub:** `patrickstigler/youtube-transcript-to-article`
+
+To pull and run the Docker image, use the following commands:
+
+```bash
+docker pull patrickstigler/youtube-transcript-to-article
+docker run -p 5000:5000 patrickstigler/youtube-transcript-to-article
+```
+
+### unRAID Installation
+
+This application is also available on unRAID as `youtube-transcript-to-article`. To install it on unRAID:
+
+1. Open the unRAID web interface.
+2. Navigate to the **Apps** tab.
+3. Search for `youtube-transcript-to-article`.
+4. Click **Install** and follow the prompts to set up the application.
+
 ## Prerequisites
 
 - Docker installed on your system.
@@ -88,4 +110,13 @@ services:
     ports:
       - "5000:5000"
 ```
+
+## License
+
+This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for details.
+
+## Contributing
+
+Contributions are welcome! Please feel free to submit a Pull Request or open an issue.
+
 
