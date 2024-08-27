@@ -40,17 +40,20 @@ def generate_article(transcript, detail_level="summary", target_lang=None):
     if target_lang:
         message_content += f"\n\nWrite the article in {target_lang}."
 
-    message = client.beta.threads.messages.create(
+    # Send the message to the assistant
+    client.beta.threads.messages.create(
         thread_id=thread.id,
         role="user",
         content=message_content,
     )
 
+    # Run the assistant and poll for the result
     run = client.beta.threads.runs.create_and_poll(
         thread_id=thread.id,
         assistant_id=assistant.id,
     )
 
+    # Check if the run completed successfully
     if run.status == "completed":
         messages = client.beta.threads.messages.list(thread_id=thread.id)
         article_content = ""
@@ -60,6 +63,8 @@ def generate_article(transcript, detail_level="summary", target_lang=None):
 
         client.beta.assistants.delete(assistant.id)
         return article_content.strip()
+    else:
+        return "Failed to generate article. Please try again."
 
 @app.route('/api/generate', methods=['POST'])
 def generate():
