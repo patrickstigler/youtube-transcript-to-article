@@ -1,18 +1,15 @@
 import os
 import re
 from flask import Flask, request, jsonify, render_template
-from openai import OpenAI
+import openai  # Changed to lowercase
 from youtube_transcript_api import YouTubeTranscriptApi, NoTranscriptFound
 
 app = Flask(__name__)
 
 # Initialize the OpenAI client with the API key from the environment variable
-client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+openai.api_key = os.getenv("OPENAI_API_KEY")  # Updated to use openai
 
 def extract_video_id(url_or_id):
-    """
-    Extracts the video ID from a YouTube URL or returns the input if it's already an ID.
-    """
     video_id_match = re.match(r"(?:https?://)?(?:www\.)?(?:youtube\.com/watch\?v=|youtu\.be/)([a-zA-Z0-9_-]{11})", url_or_id)
     return video_id_match.group(1) if video_id_match else url_or_id
 
@@ -28,14 +25,20 @@ def get_transcript(video_id, target_lang=None):
     return text
 
 def chat_gpt(prompt):
-    response = client.chat.completions.create(
-        model="gpt-3.5-turbo",
-        messages=[{"role": "user", "content": prompt}]
-    )
-    return response.choices[0].message.content.strip()
+    try:
+        response = openai.ChatCompletion.create(  # Updated to use openai
+            model="gpt-3.5-turbo",
+            messages=[{"role": "user", "content": prompt}]
+        )
+        return response.choices[0].message.content.strip()
+    except Exception as e:
+        print(f"Error calling OpenAI API: {e}")
+        return "Error processing your request."
 
 def generate_article(transcript, detail_level="summary", target_lang=None):
-    prompt = f"Write a {'detailed professional article' if detail_level == 'detailed' else 'brief summary'} based on this transcript:\n\n{transcript}"
+    prompt = (
+        f"You are a professional article author. Write a {'detailed professional article' if detail_level == 'detailed' else 'brief summary'} based on the following transcript:\n\n{transcript}"
+    )
     if target_lang:
         prompt += f"\n\nWrite the article in {target_lang}."
 
