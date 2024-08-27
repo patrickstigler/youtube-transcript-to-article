@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>YouTube Transcript to Article</title>
+</head>
+<body>
+    <h1>YouTube Transcript to Article</h1>
+    <form id="article-form">
+        <label for="video-id">YouTube Video ID:</label>
+        <input type="text" id="video-id" name="video-id" required><br><br>
+        
+        <label for="detail-level">Detail Level:</label>
+        <select id="detail-level" name="detail-level">
+            <option value="short">Kurz</option>
+            <option value="detailed">Detailliert</option>
+        </select><br><br>
+
+        <label for="target-lang">Zielsprache (optional):</label>
+        <input type="text" id="target-lang" name="target-lang"><br><br>
+
+        <button type="submit">Artikel generieren</button>
+    </form>
+
+    <h2>Generierter Artikel</h2>
+    <p id="article-output"></p>
+
+    <script>
+        document.getElementById('article-form').addEventListener('submit', async function(event) {
+            event.preventDefault();
+            const videoId = document.getElementById('video-id').value;
+            const detailLevel = document.getElementById('detail-level').value;
+            const targetLang = document.getElementById('target-lang').value;
+
+            const response = await fetch('/api/generate', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ video_id: videoId, detail_level: detailLevel, target_lang: targetLang }),
+            });
+
+            const result = await response.json();
+            document.getElementById('article-output').textContent = result.article;
+        });
+    </script>
+</body>
+</html>
