@@ -2,6 +2,7 @@ import os
 import re
 from flask import Flask, request, jsonify, render_template
 import openai
+from youtube_transcript_api import YouTubeTranscriptApi, NoTranscriptFound
 
 app = Flask(__name__)
 
