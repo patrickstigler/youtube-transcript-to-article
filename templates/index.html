@@ -1,30 +1,93 @@
 <!DOCTYPE html>
-<html lang="de">
+<html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>YouTube Transcript to Article</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/normalize/8.0.1/normalize.min.css">
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #f4f4f4;
+            margin: 0;
+            padding: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+        }
+        .container {
+            background: white;
+            padding: 2rem;
+            border-radius: 10px;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+            width: 100%;
+            max-width: 600px;
+        }
+        h1 {
+            font-size: 1.5rem;
+            margin-bottom: 1rem;
+            color: #333;
+            text-align: center;
+        }
+        label {
+            font-size: 1rem;
+            margin-bottom: 0.5rem;
+            color: #555;
+            display: block;
+        }
+        input, select, button {
+            width: 100%;
+            padding: 0.75rem;
+            margin-bottom: 1rem;
+            border-radius: 5px;
+            border: 1px solid #ddd;
+            font-size: 1rem;
+        }
+        button {
+            background-color: #007BFF;
+            color: white;
+            border: none;
+            cursor: pointer;
+        }
+        button:hover {
+            background-color: #0056b3;
+        }
+        .output {
+            margin-top: 2rem;
+        }
+        .output p {
+            background: #f9f9f9;
+            padding: 1rem;
+            border-radius: 5px;
+            border: 1px solid #ddd;
+        }
+    </style>
 </head>
 <body>
-    <h1>YouTube Transcript to Article</h1>
-    <form id="article-form">
-        <label for="video-id">YouTube Video ID:</label>
-        <input type="text" id="video-id" name="video-id" required><br><br>
+    <div class="container">
+        <h1>YouTube Transcript to Article</h1>
+        <form id="article-form">
+            <label for="video-id">YouTube Video URL or ID:</label>
+            <input type="text" id="video-id" name="video-id" placeholder="Enter YouTube video URL or ID" required>
+            
+            <label for="detail-level">Detail Level:</label>
+            <select id="detail-level" name="detail-level">
+                <option value="summary">Brief</option>
+                <option value="detailed">Detailed</option>
+            </select>
+            
+            <label for="target-lang">Target Language (optional):</label>
+            <input type="text" id="target-lang" name="target-lang" placeholder="e.g., en, de, fr">
+            
+            <button type="submit">Generate Article</button>
+        </form>
         
-        <label for="detail-level">Detail Level:</label>
-        <select id="detail-level" name="detail-level">
-            <option value="short">Kurz</option>
-            <option value="detailed">Detailliert</option>
-        </select><br><br>
-
-        <label for="target-lang">Zielsprache (optional):</label>
-        <input type="text" id="target-lang" name="target-lang"><br><br>
-
-        <button type="submit">Artikel generieren</button>
-    </form>
-
-    <h2>Generierter Artikel</h2>
-    <p id="article-output"></p>
+        <div class="output">
+            <h2>Generated Article</h2>
+            <p id="article-output">Your article will appear here...</p>
+        </div>
+    </div>
 
     <script>
         document.getElementById('article-form').addEventListener('submit', async function(event) {
