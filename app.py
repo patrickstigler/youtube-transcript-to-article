@@ -1,13 +1,13 @@
 import os
 import re
 from flask import Flask, request, jsonify, render_template
-import openai
+from openai import OpenAI
 from youtube_transcript_api import YouTubeTranscriptApi, NoTranscriptFound
 
 app = Flask(__name__)
 
-# Initialize the OpenAI client with the API key from environment variable
-client = openai.OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+# Initialize the OpenAI client with the API key from the environment variable
+client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
 def extract_video_id(url_or_id):
     """
@@ -27,44 +27,19 @@ def get_transcript(video_id, target_lang=None):
     text = " ".join([t['text'] for t in transcript])
     return text
 
+def chat_gpt(prompt):
+    response = client.chat.completions.create(
+        model="gpt-3.5-turbo",
+        messages=[{"role": "user", "content": prompt}]
+    )
+    return response.choices[0].message.content.strip()
+
 def generate_article(transcript, detail_level="summary", target_lang=None):
-    assistant = client.beta.assistants.create(
-        name="Article Author",
-        instructions="You are a professional article author. Generate a concise or detailed article based on the provided transcript.",
-        model="gpt-4-1106-preview",
-    )
-
-    thread = client.beta.threads.create()
-
-    message_content = f"Write a {'detailed professional article' if detail_level == 'detailed' else 'brief summary'} based on this transcript:\n\n{transcript}"
+    prompt = f"Write a {'detailed professional article' if detail_level == 'detailed' else 'brief summary'} based on this transcript:\n\n{transcript}"
     if target_lang:
-        message_content += f"\n\nWrite the article in {target_lang}."
+        prompt += f"\n\nWrite the article in {target_lang}."
 
-    # Send the message to the assistant
-    client.beta.threads.messages.create(
-        thread_id=thread.id,
-        role="user",
-        content=message_content,
-    )
-
-    # Run the assistant and poll for the result
-    run = client.beta.threads.runs.create_and_poll(
-        thread_id=thread.id,
-        assistant_id=assistant.id,
-    )
-
-    # Check if the run completed successfully
-    if run.status == "completed":
-        messages = client.beta.threads.messages.list(thread_id=thread.id)
-        article_content = ""
-        for message in messages:
-            if message.content[0].type == "text":
-                article_content += message.content[0].text.value + "\n"
-
-        client.beta.assistants.delete(assistant.id)
-        return article_content.strip()
-    else:
-        return "Failed to generate article. Please try again."
+    return chat_gpt(prompt)
 
 @app.route('/api/generate', methods=['POST'])
 def generate():
