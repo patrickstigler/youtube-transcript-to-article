@@ -15,6 +15,8 @@ openai.api_key = os.getenv("OPENAI_API_KEY")  # Get OpenAI API key
 MQTT_ACTIVE = os.getenv("MQTT_ACTIVE", "false").lower() == "true"
 MQTT_BROKER = os.getenv("MQTT_BROKER", "localhost")
 MQTT_PORT = int(os.getenv("MQTT_PORT", 1883))
+MQTT_USERNAME = os.getenv("MQTT_USERNAME", None)  # MQTT username
+MQTT_PASSWORD = os.getenv("MQTT_PASSWORD", None)  # MQTT password
 MQTT_TOPIC_SUB = os.getenv("MQTT_TOPIC_SUB", "video/input")
 MQTT_TOPIC_PUB = os.getenv("MQTT_TOPIC_PUB", "article/output")
 MQTT_CLIENT_ID = os.getenv("MQTT_CLIENT_ID", "youtube_article_generator")
@@ -129,6 +131,10 @@ def setup_mqtt():
     client = mqtt.Client(MQTT_CLIENT_ID)  # Create MQTT client
     client.on_connect = on_connect  # Assign on_connect callback
     client.on_message = on_message  # Assign on_message callback
+
+    # Set MQTT username and password if provided
+    if MQTT_USERNAME and MQTT_PASSWORD:
+        client.username_pw_set(MQTT_USERNAME, MQTT_PASSWORD)
 
     # Home Assistant MQTT Discovery
     discovery_topic = f"homeassistant/sensor/{MQTT_CLIENT_ID}/config"
