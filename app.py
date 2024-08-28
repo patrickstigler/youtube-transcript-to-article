@@ -144,7 +144,7 @@ def setup_mqtt():
     """
     Set up MQTT client and Home Assistant discovery.
     """
-    client = mqtt.Client(client_id=MQTT_CLIENT_ID, protocol=mqtt.MQTTv5)  # Create MQTT client with MQTTv5
+    client = mqtt.Client(client_id=MQTT_CLIENT_ID, protocol=mqtt.MQTTv5, callback_api_version=mqtt.CallbackAPIVersion.VERSION2)  # Create MQTT client with MQTTv5 and Callback API Version 2
     client.on_connect = on_connect  # Assign on_connect callback
     client.on_disconnect = on_disconnect  # Assign on_disconnect callback
     client.on_message = on_message  # Assign on_message callback
@@ -180,3 +180,4 @@ if __name__ == '__main__':
     if MQTT_ACTIVE:
         setup_mqtt()  # Set up MQTT if enabled
     app.run(host='0.0.0.0', port=5000)  # Run Flask app on all interfaces and port 5000
+``
