@@ -20,6 +20,7 @@ MQTT_PASSWORD = os.getenv("MQTT_PASSWORD", None)  # MQTT password
 MQTT_TOPIC_SUB = os.getenv("MQTT_TOPIC_SUB", "video/input")
 MQTT_TOPIC_PUB = os.getenv("MQTT_TOPIC_PUB", "article/output")
 MQTT_CLIENT_ID = os.getenv("MQTT_CLIENT_ID", "youtube_article_generator")
+LAST_MESSAGE_TOPIC = f"{MQTT_TOPIC_PUB}/last_message"  # Topic for the last outgoing message
 
 def extract_video_id(url_or_id):
     """
@@ -119,10 +120,11 @@ def on_message(client, userdata, msg):
         transcript = get_transcript(video_id, target_lang)  # Fetch transcript
         article = generate_article(transcript, detail_level, target_lang)  # Generate article
         client.publish(MQTT_TOPIC_PUB, article)  # Publish the article to the output topic
+        client.publish(LAST_MESSAGE_TOPIC, article)  # Publish the article to the last message topic
     except Exception as e:
         error_message = f"Error processing message: {e}"
         print(error_message)
-        client.publish(MQTT_TOPIC_PUB, error_message)  # Publish error message to the output topic
+        client.publish(LAST_MESSAGE_TOPIC, error_message)  # Publish error message to the last message topic
 
 def setup_mqtt():
     """
@@ -140,17 +142,19 @@ def setup_mqtt():
     discovery_topic = f"homeassistant/sensor/{MQTT_CLIENT_ID}/config"
     discovery_payload = {
         "name": "YouTube Article Generator",
-        "state_topic": MQTT_TOPIC_PUB,
+        "state_topic": LAST_MESSAGE_TOPIC,
         "command_topic": MQTT_TOPIC_SUB,
         "device": {
             "identifiers": [MQTT_CLIENT_ID],
             "name": "YouTube Article Generator",
             "model": "Custom",
-            "manufacturer": "Your Company"
-        }
+            "manufacturer": "Patrick Stigler"
+        },
+        "availability_topic": f"{MQTT_TOPIC_PUB}/availability",
+        "unique_id": MQTT_CLIENT_ID,
+        "value_template": "{{ value }}"
     }
     client.will_set(discovery_topic, payload=json.dumps(discovery_payload), qos=1, retain=True)
-
     client.connect(MQTT_BROKER, MQTT_PORT, 60)  # Connect to the MQTT broker
     client.loop_start()  # Start the MQTT loop
 
