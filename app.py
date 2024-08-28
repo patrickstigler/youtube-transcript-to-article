@@ -128,7 +128,7 @@ def setup_mqtt():
     """
     Set up MQTT client and Home Assistant discovery.
     """
-    client = mqtt.Client(MQTT_CLIENT_ID)  # Create MQTT client
+    client = mqtt.Client(MQTT_CLIENT_ID, protocol=mqtt.MQTTv311, transport="tcp", clean_session=True, userdata=None, reconnect_on_failure=True, callback_api_version="2.0")  # Create MQTT client
     client.on_connect = on_connect  # Assign on_connect callback
     client.on_message = on_message  # Assign on_message callback
 
