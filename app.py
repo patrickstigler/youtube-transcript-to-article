@@ -156,7 +156,7 @@ def setup_mqtt():
     # Home Assistant MQTT Discovery
     discovery_topic = f"homeassistant/sensor/{MQTT_CLIENT_ID}/config"
     discovery_payload = {
-        "name": "YouTube Article Generator",
+        "name": "service",
         "state_topic": LAST_MESSAGE_TOPIC,
         "command_topic": MQTT_TOPIC_SUB,
         "device": {
@@ -174,9 +174,10 @@ def setup_mqtt():
     client.will_set(AVAILABILITY_TOPIC, payload="offline", qos=1, retain=True)
     client.connect(MQTT_BROKER, MQTT_PORT, 60)  # Connect to the MQTT broker
     client.publish(AVAILABILITY_TOPIC, "online", qos=1, retain=True)  # Set the status to online immediately after connection
+    client.publish(discovery_topic, json.dumps(discovery_payload), qos=1, retain=True)  # Publish the discovery payload
     client.loop_start()  # Start the MQTT loop
 
 if __name__ == '__main__':
     if MQTT_ACTIVE:
         setup_mqtt()  # Set up MQTT if enabled
-    app.run(host='0.0.0.0', port=5000)  # Run Flask app on all interfaces and port 5000
+    app.run(host='0.0.0.0', port=5000)  # Run Flask app on all interfaces and port
