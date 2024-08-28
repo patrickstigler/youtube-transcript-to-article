@@ -9,7 +9,81 @@
 - **Article Generation**: Generates a professional article from the transcript, with options for brief or detailed formats.
 - **Customizable Output Language**: Allows you to specify the output language, with the default being the video's language.
 - **Minimalist Web Interface**: Provides a simple, user-friendly web interface to easily input video IDs or URLs and generate articles.
-- **Dockerized Deployment**: Easy deployment with Docker, including integration options for Home Assistant.
+- **Dockerized Deployment**: Easy deployment with Docker, including integration options for Home Assistant and MQTT.
+
+## MQTT Integration
+
+The project includes support for MQTT, enabling integration with various IoT platforms like Home Assistant. This allows for automated processing of YouTube videos when a video link or ID is published to a specific MQTT topic.
+
+### MQTT Features
+
+- **Real-Time Processing**: Automatically processes YouTube video links or IDs when published to a subscribed MQTT topic.
+- **Configurable Output**: Supports specifying `detail_level` (summary or detailed) and `target_lang` (output language) through MQTT.
+- **Automatic Responses**: Publishes the generated article to a specified MQTT topic.
+- **MQTT Authentication**: Supports username and password authentication for connecting to MQTT brokers.
+- **Home Assistant Discovery**: Automatically registers availability and last processed message sensors in Home Assistant using MQTT Discovery.
+
+### Environment Variables for MQTT
+
+Ensure the following environment variables are set in your Docker setup:
+
+- `MQTT_ACTIVE`: Set to `true` to enable MQTT functionality.
+- `MQTT_BROKER`: The MQTT broker address (default: `localhost`).
+- `MQTT_PORT`: The port for the MQTT broker (default: `1883`).
+- `MQTT_USERNAME`: The username for MQTT authentication (optional).
+- `MQTT_PASSWORD`: The password for MQTT authentication (optional).
+- `MQTT_TOPIC_SUB`: The MQTT topic to subscribe to for incoming video links/IDs (default: `video/input`).
+- `MQTT_TOPIC_PUB`: The MQTT topic to publish the generated articles to (default: `article/output`).
+- `MQTT_CLIENT_ID`: A unique client ID for the MQTT connection.
+
+### Example MQTT Payload
+
+To trigger the processing of a video through MQTT, publish a JSON-formatted message to the subscribed topic (`MQTT_TOPIC_SUB`):
+
+```json
+{
+  "video_id": "YOUR_YOUTUBE_VIDEO_URL_OR_ID",
+  "detail_level": "summary", // Options: "summary", "detailed"
+  "target_lang": "en" // Optional, specify if you want a different language
+}
+```
+
+The generated article will be published to the `MQTT_TOPIC_PUB` topic.
+
+### Home Assistant Integration
+
+You can easily integrate this project with Home Assistant using MQTT Discovery, which automatically configures sensors in Home Assistant to monitor the service's availability and display the last processed video and article.
+
+#### Home Assistant MQTT Discovery
+
+When MQTT is enabled, the service will automatically register the following sensors in Home Assistant:
+
+- **Service Availability**: A binary sensor that shows whether the service is online or offline.
+- **Last Processed Message**: A sensor that displays the last processed video URL and the corresponding article.
+
+### Docker Compose Example for Home Assistant Integration
+
+If you are using `docker-compose`, here’s an example configuration for integrating this service with Home Assistant:
+
+```yaml
+version: '3'
+services:
+  youtube-transcript-to-article:
+    image: patrickstigler/youtube-transcript-to-article
+    container_name: youtube_transcript_to_article
+    environment:
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - MQTT_ACTIVE=true
+      - MQTT_BROKER=your_mqtt_broker_address
+      - MQTT_PORT=1883
+      - MQTT_USERNAME=your_mqtt_username
+      - MQTT_PASSWORD=your_mqtt_password
+      - MQTT_TOPIC_SUB=video/input
+      - MQTT_TOPIC_PUB=article/output
+      - MQTT_CLIENT_ID=youtube_article_generator
+    ports:
+      - "5000:5000"
+```
 
 ## Docker Image and Installation
 
@@ -95,22 +169,6 @@ This application is also available on unRAID as `youtube-transcript-to-article`.
 
 Access the minimalist web interface by navigating to `http://localhost:5000` in your browser. Here, you can input the YouTube video URL or ID, choose the detail level, and specify a target language if desired.
 
-## Home Assistant Integration
-
-To integrate with Home Assistant, add the following service to your `docker-compose.yml` or use a RESTful API configuration:
-
-```yaml
-version: '3'
-services:
-  youtube-transcript-to-article:
-    image: youtube-transcript-to-article
-    container_name: youtube_transcript_to_article
-    environment:
-      - OPENAI_API_KEY=${OPENAI_API_KEY}
-    ports:
-      - "5000:5000"
-```
-
 ## License
 
 This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for details.
@@ -118,5 +176,3 @@ This project is licensed under the MIT License. See the [LICENSE](LICENSE) file 
 ## Contributing
 
 Contributions are welcome! Please feel free to submit a Pull Request or open an issue.
-
-
