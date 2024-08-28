@@ -21,6 +21,7 @@ The project includes support for MQTT, enabling integration with various IoT pla
 - **Configurable Output**: Supports specifying `detail_level` (summary or detailed) and `target_lang` (output language) through MQTT.
 - **Automatic Responses**: Publishes the generated article to a specified MQTT topic.
 - **MQTT Authentication**: Supports username and password authentication for connecting to MQTT brokers.
+- **Home Assistant Discovery**: Automatically registers availability and last processed message sensors in Home Assistant using MQTT Discovery.
 
 ### Environment Variables for MQTT
 
@@ -49,13 +50,16 @@ To trigger the processing of a video through MQTT, publish a JSON-formatted mess
 
 The generated article will be published to the `MQTT_TOPIC_PUB` topic.
 
-## Home Assistant Integration
+### Home Assistant Integration
 
-You can easily integrate this project with Home Assistant using MQTT Discovery, which will automatically configure a sensor in Home Assistant to handle YouTube video processing.
+You can easily integrate this project with Home Assistant using MQTT Discovery, which automatically configures sensors in Home Assistant to monitor the service's availability and display the last processed video and article.
 
-### Home Assistant MQTT Discovery
+#### Home Assistant MQTT Discovery
 
-When MQTT is enabled, the service will automatically register itself with Home Assistant using MQTT Discovery. This will create a sensor in Home Assistant that listens for video links/IDs and posts the generated articles back.
+When MQTT is enabled, the service will automatically register the following sensors in Home Assistant:
+
+- **Service Availability**: A binary sensor that shows whether the service is online or offline.
+- **Last Processed Message**: A sensor that displays the last processed video URL and the corresponding article.
 
 ### Docker Compose Example for Home Assistant Integration
 
