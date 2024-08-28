@@ -21,6 +21,7 @@ MQTT_TOPIC_SUB = os.getenv("MQTT_TOPIC_SUB", "video/input")
 MQTT_TOPIC_PUB = os.getenv("MQTT_TOPIC_PUB", "article/output")
 MQTT_CLIENT_ID = os.getenv("MQTT_CLIENT_ID", "youtube_article_generator")
 LAST_MESSAGE_TOPIC = f"{MQTT_TOPIC_PUB}/last_message"  # Topic for the last outgoing message
+AVAILABILITY_TOPIC = f"{MQTT_TOPIC_PUB}/availability"  # Topic for the availability status
 
 def extract_video_id(url_or_id):
     """
@@ -104,7 +105,14 @@ def on_connect(client, userdata, flags, reason_code, properties):
     Callback for when the client connects to the broker.
     """
     print(f"Connected with result code {reason_code}")
+    client.publish(AVAILABILITY_TOPIC, "online", qos=1, retain=True)  # Set the status to online
     client.subscribe(MQTT_TOPIC_SUB)  # Subscribe to the input topic
+
+def on_disconnect(client, userdata, rc):
+    """
+    Callback for when the client disconnects from the broker.
+    """
+    client.publish(AVAILABILITY_TOPIC, "offline", qos=1, retain=True)  # Set the status to offline
 
 def on_message(client, userdata, msg):
     """
@@ -138,6 +146,7 @@ def setup_mqtt():
     """
     client = mqtt.Client(client_id=MQTT_CLIENT_ID, protocol=mqtt.MQTTv5)  # Create MQTT client with MQTTv5
     client.on_connect = on_connect  # Assign on_connect callback
+    client.on_disconnect = on_disconnect  # Assign on_disconnect callback
     client.on_message = on_message  # Assign on_message callback
 
     # Set MQTT username and password if provided
@@ -156,16 +165,15 @@ def setup_mqtt():
             "model": "Custom",
             "manufacturer": "Patrick Stigler"
         },
-        "availability_topic": f"{MQTT_TOPIC_PUB}/availability",
+        "availability_topic": AVAILABILITY_TOPIC,
         "unique_id": MQTT_CLIENT_ID,
         "value_template": "{{ value_json.article }}",
         "json_attributes_topic": LAST_MESSAGE_TOPIC,  # Include all JSON attributes
         "json_attributes_template": "{{ value_json | tojson }}"
     }
-    client.will_set(f"{MQTT_TOPIC_PUB}/availability", payload="offline", qos=1, retain=True)
-    client.publish(f"{MQTT_TOPIC_PUB}/availability", payload="online", qos=1, retain=True)
-    client.will_set(discovery_topic, payload=json.dumps(discovery_payload), qos=1, retain=True)
+    client.will_set(AVAILABILITY_TOPIC, payload="offline", qos=1, retain=True)
     client.connect(MQTT_BROKER, MQTT_PORT, 60)  # Connect to the MQTT broker
+    client.publish(AVAILABILITY_TOPIC, "online", qos=1, retain=True)  # Set the status to online immediately after connection
     client.loop_start()  # Start the MQTT loop
 
 if __name__ == '__main__':
