@@ -180,4 +180,3 @@ if __name__ == '__main__':
     if MQTT_ACTIVE:
         setup_mqtt()  # Set up MQTT if enabled
     app.run(host='0.0.0.0', port=5000)  # Run Flask app on all interfaces and port 5000
-``
