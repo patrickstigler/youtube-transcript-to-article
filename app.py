@@ -120,11 +120,17 @@ def on_message(client, userdata, msg):
         transcript = get_transcript(video_id, target_lang)  # Fetch transcript
         article = generate_article(transcript, detail_level, target_lang)  # Generate article
         client.publish(MQTT_TOPIC_PUB, article)  # Publish the article to the output topic
-        client.publish(LAST_MESSAGE_TOPIC, article)  # Publish the article to the last message topic
+
+        # Publish the article and the video URL to the last message topic
+        last_message_payload = {
+            "video_url": video_input,
+            "article": article
+        }
+        client.publish(LAST_MESSAGE_TOPIC, json.dumps(last_message_payload))  # Publish last message data
     except Exception as e:
         error_message = f"Error processing message: {e}"
         print(error_message)
-        client.publish(LAST_MESSAGE_TOPIC, error_message)  # Publish error message to the last message topic
+        client.publish(LAST_MESSAGE_TOPIC, json.dumps({"error": error_message}))  # Publish error message
 
 def setup_mqtt():
     """
@@ -152,8 +158,12 @@ def setup_mqtt():
         },
         "availability_topic": f"{MQTT_TOPIC_PUB}/availability",
         "unique_id": MQTT_CLIENT_ID,
-        "value_template": "{{ value }}"
+        "value_template": "{{ value_json.article }}",
+        "json_attributes_topic": LAST_MESSAGE_TOPIC,  # Include all JSON attributes
+        "json_attributes_template": "{{ value_json | tojson }}"
     }
+    client.will_set(f"{MQTT_TOPIC_PUB}/availability", payload="offline", qos=1, retain=True)
+    client.publish(f"{MQTT_TOPIC_PUB}/availability", payload="online", qos=1, retain=True)
     client.will_set(discovery_topic, payload=json.dumps(discovery_payload), qos=1, retain=True)
     client.connect(MQTT_BROKER, MQTT_PORT, 60)  # Connect to the MQTT broker
     client.loop_start()  # Start the MQTT loop
