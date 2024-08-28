@@ -153,31 +153,51 @@ def setup_mqtt():
     if MQTT_USERNAME and MQTT_PASSWORD:
         client.username_pw_set(MQTT_USERNAME, MQTT_PASSWORD)
 
-    # Home Assistant MQTT Discovery
-    discovery_topic = f"homeassistant/sensor/{MQTT_CLIENT_ID}/config"
-    discovery_payload = {
-        "name": "service",
-        "state_topic": LAST_MESSAGE_TOPIC,
-        "command_topic": MQTT_TOPIC_SUB,
+    # Home Assistant MQTT Discovery for Availability
+    availability_discovery_topic = f"homeassistant/binary_sensor/{MQTT_CLIENT_ID}/availability/config"
+    availability_discovery_payload = {
+        "name": "service_availability",
+        "state_topic": AVAILABILITY_TOPIC,
+        "device_class": "connectivity",
+        "payload_on": "online",
+        "payload_off": "offline",
         "device": {
             "identifiers": [MQTT_CLIENT_ID],
             "name": "YouTube Article Generator",
             "model": "Custom",
             "manufacturer": "Patrick Stigler"
         },
-        "availability_topic": AVAILABILITY_TOPIC,
-        "unique_id": MQTT_CLIENT_ID,
+        "unique_id": f"{MQTT_CLIENT_ID}_availability"
+    }
+
+    # Home Assistant MQTT Discovery for Last Message
+    last_message_discovery_topic = f"homeassistant/sensor/{MQTT_CLIENT_ID}/last_message/config"
+    last_message_discovery_payload = {
+        "name": "service_last_message",
+        "state_topic": LAST_MESSAGE_TOPIC,
+        "device": {
+            "identifiers": [MQTT_CLIENT_ID],
+            "name": "YouTube Article Generator",
+            "model": "Custom",
+            "manufacturer": "Patrick Stigler"
+        },
+        "unique_id": f"{MQTT_CLIENT_ID}_last_message",
         "value_template": "{{ value_json.article }}",
         "json_attributes_topic": LAST_MESSAGE_TOPIC,  # Include all JSON attributes
         "json_attributes_template": "{{ value_json | tojson }}"
     }
+
     client.will_set(AVAILABILITY_TOPIC, payload="offline", qos=1, retain=True)
     client.connect(MQTT_BROKER, MQTT_PORT, 60)  # Connect to the MQTT broker
     client.publish(AVAILABILITY_TOPIC, "online", qos=1, retain=True)  # Set the status to online immediately after connection
-    client.publish(discovery_topic, json.dumps(discovery_payload), qos=1, retain=True)  # Publish the discovery payload
+
+    # Publish the discovery payloads
+    client.publish(availability_discovery_topic, json.dumps(availability_discovery_payload), qos=1, retain=True)
+    client.publish(last_message_discovery_topic, json.dumps(last_message_discovery_payload), qos=1, retain=True)
+
     client.loop_start()  # Start the MQTT loop
 
 if __name__ == '__main__':
     if MQTT_ACTIVE:
         setup_mqtt()  # Set up MQTT if enabled
-    app.run(host='0.0.0.0', port=5000)  # Run Flask app on all interfaces and port
+    app.run(host='0.0.0.0', port=5000)  # Run Flask app on all interfaces and port 5000
