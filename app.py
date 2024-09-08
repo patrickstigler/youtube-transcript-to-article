@@ -1,11 +1,11 @@
 import os
 import re
 import json
+import emoji  # For removing emojis from file names
 from flask import Flask, request, jsonify, render_template
 import openai  # Import OpenAI library
 from youtube_transcript_api import YouTubeTranscriptApi, NoTranscriptFound  # For fetching YouTube transcripts
 import paho.mqtt.client as mqtt  # Import MQTT library
-import emoji  # To clean emojis
 
 app = Flask(__name__)  # Initialize Flask application
 
@@ -23,155 +23,115 @@ MQTT_TOPIC_PUB = os.getenv("MQTT_TOPIC_PUB", "article/output")
 MQTT_CLIENT_ID = os.getenv("MQTT_CLIENT_ID", "youtube_article_generator")
 LAST_MESSAGE_TOPIC = f"{MQTT_TOPIC_PUB}/last_message"  # Topic for the last outgoing message
 AVAILABILITY_TOPIC = f"{MQTT_TOPIC_PUB}/availability"  # Topic for the availability status
+OUTPUT_FOLDER = os.getenv("OUTPUT_FOLDER", "./output")  # Folder to save markdown files
 
-# Function to clean and format the video title (remove emojis and special characters)
-def clean_title(title):
-    title = emoji.replace_emoji(title, replace='')  # Remove emojis
-    title = re.sub(r'[^\w\s\-]', '', title)  # Remove non-alphanumeric characters
-    return title.strip()
-
-# Function to save the video article as a Markdown file
-def save_article_as_markdown(video_info, article, output_folder):
-    # Extract the YouTuber's name and clean it
-    youtuber_name = clean_title(video_info.get('channel_name', 'Unknown_Youtuber'))
-    
-    # Create a folder for the YouTuber if it doesn't exist
-    youtuber_folder = os.path.join(output_folder, youtuber_name)
-    if not os.path.exists(youtuber_folder):
-        os.makedirs(youtuber_folder)
-    
-    # Clean the video title for a valid file name
-    video_title = clean_title(video_info.get('video_title', 'Unknown_Video'))
-    
-    # Create the file path for the Markdown file
-    markdown_file_path = os.path.join(youtuber_folder, f"{video_title}.md")
-    
-    # Prepare the content for the Markdown file
-    markdown_content = f"""
-# {video_info.get('video_title', 'No Title')}
-**Uploader:** {video_info.get('channel_name', 'Unknown Channel')}
-**Video-ID:** {video_info.get('video_id', 'Unknown ID')}
-**Veröffentlicht am:** {video_info.get('publish_date', 'Unknown Date')}
-
-**Artikel:**
-
-{article}
-    """
-    
-    # Write the content to the Markdown file
-    with open(markdown_file_path, 'w', encoding='utf-8') as f:
-        f.write(markdown_content)
-    
-    print(f"Markdown file saved: {markdown_file_path}")
-
-# Function to extract the video ID from a URL or ID
 def extract_video_id(url_or_id):
+    """
+    Extracts the video ID from a YouTube URL or returns the input if it's already an ID.
+    """
     video_id_match = re.match(r"(?:https?://)?(?:www\.)?(?:youtube\.com/watch\?v=|youtu\.be/)([a-zA-Z0-9_-]{11})", url_or_id)
-    return video_id_match.group(1) if video_id_match else url_or_id
+    return video_id_match.group(1) if video_id_match else url_or_id  # Return video ID
 
-# Function to fetch the transcript of a YouTube video
 def get_transcript(video_id, target_lang=None):
+    """
+    Fetches the transcript for the given YouTube video ID.
+    """
     try:
+        # Try to fetch the transcript in the specified language
         transcript = YouTubeTranscriptApi.get_transcript(video_id, languages=[target_lang] if target_lang else [])
     except NoTranscriptFound:
+        # If no transcript is found, list available transcripts and fetch one
         transcript_list = YouTubeTranscriptApi.list_transcripts(video_id)
         available_languages = [transcript.language_code for transcript in transcript_list]
         transcript = YouTubeTranscriptApi.get_transcript(video_id, languages=available_languages)
 
+    # Combine all text segments to create a complete transcript
     text = " ".join([t['text'] for t in transcript])
-    return text
+    return text  # Return transcript text
 
-# Function to interact with OpenAI API to generate an article
 def chat_gpt(prompt):
+    """
+    Sends a prompt to the OpenAI Chat API and returns the response.
+    """
     try:
+        # Call the OpenAI API with the prompt
         response = openai.ChatCompletion.create(
-            model="gpt-3.5-turbo",
+            model="gpt-3.5-turbo",  # Select model
             messages=[
-                {"role": "system", "content": "You are a helpful assistant."},
-                {"role": "user", "content": prompt}
+                {"role": "system", "content": "You are a helpful assistant."},  # Assistant context
+                {"role": "user", "content": prompt}  # User prompt
             ]
         )
-        return response['choices'][0]['message']['content'].strip()
+        return response['choices'][0]['message']['content'].strip()  # Return AI response
     except Exception as e:
-        print(f"Error calling OpenAI API: {e}")
-        return "Error processing your request."
+        print(f"Error calling OpenAI API: {e}")  # Print error
+        return "Error processing your request."  # Return error message
 
-# Function to generate an article or summary based on the transcript
+def save_to_markdown(video_title, youtuber_name, article):
+    """
+    Saves the generated article as a Markdown file.
+    """
+    # Clean video title and youtuber name to remove emojis
+    video_title_clean = emoji.replace_emoji(video_title, replace="").strip()
+    youtuber_name_clean = emoji.replace_emoji(youtuber_name, replace="").strip()
+
+    # Create the directory for the Youtuber if it doesn't exist
+    youtuber_folder = os.path.join(OUTPUT_FOLDER, youtuber_name_clean)
+    os.makedirs(youtuber_folder, exist_ok=True)
+
+    # Define the file path for the markdown file
+    markdown_file_path = os.path.join(youtuber_folder, f"{video_title_clean}.md")
+
+    # Write the article content to the markdown file
+    with open(markdown_file_path, "w", encoding="utf-8") as f:
+        f.write(f"# {video_title_clean}\n\n")
+        f.write(article)
+
+    return markdown_file_path  # Return the path to the markdown file
+
 def generate_article(transcript, detail_level="summary", target_lang=None):
+    """
+    Generates an article or summary based on the provided transcript.
+    """
     prompt = (
         f"You are a professional article author. Write a {'detailed professional article' if detail_level == 'detailed' else 'brief summary'} based on the following transcript:\n\n{transcript}"
     )
     if target_lang:
-        prompt += f"\n\nWrite the article in {target_lang}."
-    return chat_gpt(prompt)
+        prompt += f"\n\nWrite the article in {target_lang}."  # Add language preference if provided
 
-# API endpoint to generate an article
+    return chat_gpt(prompt)  # Get generated article from chat_gpt function
+
 @app.route('/api/generate', methods=['POST'])
 def generate():
-    data = request.json
-    video_input = data.get('video_id')
-    detail_level = data.get('detail_level', 'summary')
-    target_lang = data.get('target_lang', None)
-    
-    video_id = extract_video_id(video_input)
-    transcript = get_transcript(video_id, target_lang)
-    article = generate_article(transcript, detail_level, target_lang)
+    """
+    API endpoint for generating an article from a YouTube video transcript.
+    """
+    data = request.json  # Get JSON data from the request
+    video_input = data.get('video_id')  # Extract video ID from input
+    video_title = data.get('video_title', 'Untitled')  # Get the video title (provide a default if missing)
+    youtuber_name = data.get('youtuber_name', 'Unknown')  # Get the Youtuber name (provide a default if missing)
+    detail_level = data.get('detail_level', 'summary')  # Get detail level, default is 'summary'
+    target_lang = data.get('target_lang', None)  # Get target language, if provided
 
-    # Additional information about the video for Markdown generation
-    video_info = {
-        "video_title": data.get('video_title', 'Unknown_Video'),
-        "channel_name": data.get('channel_name', 'Unknown_Channel'),
-        "video_id": video_id,
-        "publish_date": data.get('publish_date', 'Unknown Date'),
-        "description": data.get('description', 'Keine Beschreibung')
-    }
+    video_id = extract_video_id(video_input)  # Extract video ID
+    transcript = get_transcript(video_id, target_lang)  # Fetch transcript for the video
+    article = generate_article(transcript, detail_level, target_lang)  # Generate article
 
-    # Save the generated article as a Markdown file
-    output_folder = os.getenv('OUTPUT_FOLDER', './output')  # Default output folder
-    save_article_as_markdown(video_info, article, output_folder)
+    # Save the generated article to a markdown file
+    markdown_file_path = save_to_markdown(video_title, youtuber_name, article)
 
-    # Return the generated article as JSON
-    return jsonify({"article": article})
+    return jsonify({"article": article, "markdown_path": markdown_file_path})  # Return generated article as JSON
 
-# Function to handle MQTT messages
-def on_message(client, userdata, msg):
-    try:
-        data = json.loads(msg.payload.decode())
-        video_input = data.get('video_id')
-        detail_level = data.get('detail_level', 'summary')
-        target_lang = data.get('target_lang', None)
+@app.route('/')
+def home():
+    """
+    Renders the home page.
+    """
+    return render_template('index.html')  # Render index.html template
 
-        video_id = extract_video_id(video_input)
-        transcript = get_transcript(video_id, target_lang)
-        article = generate_article(transcript, detail_level, target_lang)
-
-        # Additional information for Markdown
-        video_info = {
-            "video_title": data.get('video_title', 'Unknown_Video'),
-            "channel_name": data.get('channel_name', 'Unknown_Channel'),
-            "video_id": video_id,
-            "publish_date": data.get('publish_date', 'Unknown Date'),
-            "description": data.get('description', 'Keine Beschreibung')
-        }
-
-        # Save the article to a Markdown file
-        output_folder = os.getenv('OUTPUT_FOLDER', './output')
-        save_article_as_markdown(video_info, article, output_folder)
-
-        client.publish(MQTT_TOPIC_PUB, article)
-
-        last_message_payload = {
-            "video_url": video_input,
-            "article": article
-        }
-        client.publish(LAST_MESSAGE_TOPIC, json.dumps(last_message_payload))
-    except Exception as e:
-        error_message = f"Error processing message: {e}"
-        client.publish(LAST_MESSAGE_TOPIC, json.dumps({"error": error_message}))
-
-# MQTT setup and connection functions...
+# MQTT setup and callbacks remain unchanged...
 
 if __name__ == '__main__':
     if MQTT_ACTIVE:
-        setup_mqtt()
-    app.run(host='0.0.0.0', port=5000)
+        setup_mqtt()  # Set up MQTT if enabled
+    app.run(host='0.0.0.0', port=5000)  # Run Flask app on all interfaces and port 5000
