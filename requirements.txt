@@ -2,4 +2,4 @@ Flask==3.0.0
 youtube-transcript-api==0.6.0
 openai==0.28
 paho-mqtt==2.1.0
-emoji==2.2.0
+bs4==0.0.2
