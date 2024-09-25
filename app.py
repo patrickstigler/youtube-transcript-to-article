@@ -161,7 +161,7 @@ def generate():
     return jsonify({
         "article": article,
         "video_id": video_id,
-        "video_title": video_info["title"],
+        "video_title": video_info["title"]
         #"channel_name": video_info["channel"]
     })  # Return generated article with video metadata
 
