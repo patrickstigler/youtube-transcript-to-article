@@ -1,6 +1,8 @@
 import os
 import re
 import json
+import requests
+from bs4 import BeautifulSoup
 from flask import Flask, request, jsonify, render_template
 import openai  # Import OpenAI library
 from youtube_transcript_api import YouTubeTranscriptApi, NoTranscriptFound  # For fetching YouTube transcripts
@@ -30,6 +32,39 @@ def extract_video_id(url_or_id):
     video_id_match = re.match(r"(?:https?://)?(?:www\.)?(?:youtube\.com/watch\?v=|youtu\.be/)([a-zA-Z0-9_-]{11})", url_or_id)
     return video_id_match.group(1) if video_id_match else url_or_id  # Return video ID
 
+
+def get_video_info_scrape(video_id):
+    """
+    Fetches the title and channel name of a YouTube video by scraping the YouTube page.
+    """
+    try:
+        url = f"https://www.youtube.com/watch?v={video_id}"
+        response = requests.get(url)
+
+        if response.status_code != 200:
+            return {"title": "Unknown title", "channel": "Unknown channel"}
+
+        soup = BeautifulSoup(response.text, "html.parser")
+
+        # Extract video title from the HTML meta tag
+        title = soup.find("meta", property="og:title")
+        if title:
+            title = title["content"]
+        else:
+            title = "Unknown title"
+
+        # Try extracting the channel name based on known YouTube structure
+        channel = "Unknown channel"
+        channel_tag = soup.find("a", {"class": "yt-simple-endpoint style-scope yt-formatted-string"})
+        if channel_tag:
+            channel = channel_tag.text.strip()  # Extract the text and strip unnecessary spaces
+
+        return {"title": title, "channel": channel}
+    except Exception as e:
+        print(f"Error scraping video info: {e}")
+        return {"title": "Unknown title", "channel": "Unknown channel"}
+
+
 def get_transcript(video_id, target_lang=None):
     """
     Fetches the transcript for the given YouTube video ID.
@@ -51,12 +86,41 @@ def chat_gpt(prompt):
     """
     Sends a prompt to the OpenAI Chat API and returns the response.
     """
+    prompt_background = (f"# IDENTITY and PURPOSE\n"
+                        f"You extract surprising, insightful, and interesting information from text content. You are interested in insights related to the purpose and meaning of life, human flourishing, the role of technology in the future of humanity, artificial intelligence and its affect on humans, memes, learning, reading, books, continuous improvement, and similar topics.\n"
+                        f"Take a step back and think step-by-step about how to achieve the best possible results by following the steps below.\n\n"
+                        f"# STEPS\n\n"
+                        f"- Extract a summary of the content in 25 words, including who is presenting and the content being discussed into a section called SUMMARY.\n"
+                        f"- Extract 20 to 50 of the most surprising, insightful, and/or interesting ideas from the input in a section called IDEAS:. If there are less than 50 then collect all of them. Make sure you extract at least 20.\n"
+                        f"- Extract 10 to 20 of the best insights from the input and from a combination of the raw input and the IDEAS above into a section called INSIGHTS. These INSIGHTS should be fewer, more refined, more insightful, and more abstracted versions of the best ideas in the content. \n"
+                        f"- Extract 15 to 30 of the most surprising, insightful, and/or interesting quotes from the input into a section called QUOTES:. Use the exact quote text from the input.\n"
+                        f"- Extract 15 to 30 of the most practical and useful personal habits of the speakers, or mentioned by the speakers, in the content into a section called HABITS. Examples include but aren't limited to: sleep schedule, reading habits, things they always do, things they always avoid, productivity tips, diet, exercise, etc.\n"
+                        f"- Extract 15 to 30 of the most surprising, insightful, and/or interesting valid facts about the greater world that were mentioned in the content into a section called FACTS:.\n"
+                        f"- Extract all mentions of writing, art, tools, projects and other sources of inspiration mentioned by the speakers into a section called REFERENCES. This should include any and all references to something that the speaker mentioned.\n"
+                        f"- Extract the most potent takeaway and recommendation into a section called ONE-SENTENCE TAKEAWAY. This should be a 15-word sentence that captures the most important essence of the content.\n"
+                        f"- Extract the 15 to 30 of the most surprising, insightful, and/or interesting recommendations that can be collected from the content into a section called RECOMMENDATIONS.\n\n"
+                        f"# OUTPUT INSTRUCTIONS\n\n"
+                        f"- Only output Markdown.\n"
+                        f"- Write the IDEAS bullets as exactly 15 words.\n"
+                        f"- Write the RECOMMENDATIONS bullets as exactly 15 words.\n"
+                        f"- Write the HABITS bullets as exactly 15 words.\n"
+                        f"- Write the FACTS bullets as exactly 15 words.\n"
+                        f"- Write the INSIGHTS bullets as exactly 15 words.\n"
+                        f"- Extract at least 25 IDEAS from the content.\n"
+                        f"- Extract at least 10 INSIGHTS from the content.\n"
+                        f"- Extract at least 20 items for the other output sections.\n"
+                        f"- Do not give warnings or notes; only output the requested sections.\n"
+                        f"- You use bulleted lists for output, not numbered lists.\n"
+                        f"- Do not repeat ideas, quotes, facts, or resources.\n"
+                        f"- Do not start items with the same opening words.\n"
+                        f"- Ensure you follow ALL these instructions when creating your output.\n\n")
+
     try:
         # Call the OpenAI API with the prompt
         response = openai.ChatCompletion.create(
             model="gpt-3.5-turbo",  # Select model
             messages=[
-                {"role": "system", "content": "You are a helpful assistant."},  # Assistant context
+                {"role": "system", "content": prompt_background},  # Assistant context
                 {"role": "user", "content": prompt}  # User prompt
             ]
         )
@@ -70,7 +134,7 @@ def generate_article(transcript, detail_level="summary", target_lang=None):
     Generates an article or summary based on the provided transcript.
     """
     prompt = (
-        f"You are a professional article author. Write a {'detailed professional article' if detail_level == 'detailed' else 'brief summary'} based on the following transcript:\n\n{transcript}"
+        f"Write a {'detailed professional article' if detail_level == 'detailed' else 'brief summary'} based on the following INPUT\n\n{transcript}"
     )
     if target_lang:
         prompt += f"\n\nWrite the article in {target_lang}."  # Add language preference if provided
@@ -91,7 +155,16 @@ def generate():
     transcript = get_transcript(video_id, target_lang)  # Fetch transcript for the video
     article = generate_article(transcript, detail_level, target_lang)  # Generate article
 
-    return jsonify({"article": article})  # Return generated article as JSON
+    # Fetch video title and channel name via scraping
+    video_info = get_video_info_scrape(video_id)
+
+    return jsonify({
+        "article": article,
+        "video_id": video_id,
+        "video_title": video_info["title"],
+        #"channel_name": video_info["channel"]
+    })  # Return generated article with video metadata
+
 
 @app.route('/')
 def home():
