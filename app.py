@@ -153,18 +153,33 @@ def generate():
 
     video_id = extract_video_id(video_input)  # Extract video ID
     transcript = get_transcript(video_id, target_lang)  # Fetch transcript for the video
-    article = generate_article(transcript, detail_level, target_lang)  # Generate article
-
-    # Fetch video title and channel name via scraping
-    video_info = get_video_info_scrape(video_id)
+    article = generate_article(transcript, detail_level, target_lang)  # Generate article  
+    video_info = get_video_info_scrape(video_id) # Fetch video title and channel name via scraping
 
     return jsonify({
         "article": article,
         "video_id": video_id,
         "video_title": video_info["title"]
-        #"channel_name": video_info["channel"]
-    })  # Return generated article with video metadata
+    })
+    
+@app.route('/api/transcript', methods=['POST'])
+def generate():
+    """
+    API endpoint for get the plain transcript
+    """
+    data = request.json  # Get JSON data from the request
+    video_input = data.get('video_id')  # Extract video ID from input
+    target_lang = data.get('target_lang', None)  # Get target language, if provided
 
+    video_id = extract_video_id(video_input)  # Extract video ID
+    transcript = get_transcript(video_id, target_lang)  # Fetch transcript for the video  
+    video_info = get_video_info_scrape(video_id) # Fetch video title and channel name via scraping
+
+    return jsonify({
+        "transcript": transcript,
+        "video_id": video_id,
+        "video_title": video_info["title"]
+    })  
 
 @app.route('/')
 def home():
