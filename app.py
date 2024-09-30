@@ -163,7 +163,7 @@ def generate():
     })
     
 @app.route('/api/transcript', methods=['POST'])
-def generate():
+def transcript():
     """
     API endpoint for get the plain transcript
     """
