@@ -2,8 +2,25 @@ version: '3'
 services:
   youtube-transcript-to-article:
     image: patrickstigler/youtube-transcript-to-article
-    container_name: youtube_transcript_to_article    
+    container_name: youtube_transcript_to_article
     environment:
-      - OPENAI_API_KEY=${OPENAI_API_KEY}    
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - APP_MODE=flask
+      # Optional defaults (see README):
+      # - DEFAULT_MODEL=gpt-4o-mini
+      # - DEFAULT_MODEL_HOST=openai
+      # - LOCALAI_BASE_URL=http://host.docker.internal:8080/v1
+      # - OPENAI_BASE_URL=https://api.openai.com/v1
     ports:
       - "5000:5000"
+
+  # Optional: MCP streamable HTTP on :8000 — run: docker compose --profile mcp up
+  youtube-transcript-mcp:
+    profiles:
+      - mcp
+    image: patrickstigler/youtube-transcript-to-article
+    container_name: youtube_transcript_mcp
+    environment:
+      - APP_MODE=mcp
+    ports:
+      - "8000:8000"

@@ -7,117 +7,241 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/normalize/8.0.1/normalize.min.css">
     <style>
         body {
-            font-family: Arial, sans-serif;
-            background-color: #f4f4f4;
+            font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+            background-color: #f0f2f5;
             margin: 0;
-            padding: 0;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            height: 100vh;
+            padding: 1.5rem;
+            min-height: 100vh;
+            box-sizing: border-box;
         }
         .container {
             background: white;
-            padding: 2rem;
-            border-radius: 10px;
-            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+            padding: 1.75rem;
+            border-radius: 12px;
+            box-shadow: 0 2px 12px rgba(0, 0, 0, 0.08);
             width: 100%;
-            max-width: 600px;
+            max-width: 640px;
+            margin: 0 auto;
         }
         h1 {
-            font-size: 1.5rem;
-            margin-bottom: 1rem;
-            color: #333;
+            font-size: 1.35rem;
+            margin: 0 0 1.25rem;
+            color: #1a1a1a;
             text-align: center;
+            font-weight: 600;
         }
         label {
-            font-size: 1rem;
-            margin-bottom: 0.5rem;
-            color: #555;
+            font-size: 0.875rem;
+            margin-bottom: 0.35rem;
+            color: #444;
             display: block;
+            font-weight: 500;
+        }
+        .hint {
+            font-size: 0.75rem;
+            color: #777;
+            margin: -0.25rem 0 0.5rem;
         }
         input, select, button {
             width: 100%;
-            padding: 0.75rem;
-            margin-bottom: 1rem;
-            border-radius: 5px;
-            border: 1px solid #ddd;
-            font-size: 1rem;
+            padding: 0.65rem 0.75rem;
+            margin-bottom: 0.85rem;
+            border-radius: 8px;
+            border: 1px solid #d8dde3;
+            font-size: 0.95rem;
+            box-sizing: border-box;
+        }
+        input:focus, select:focus {
+            outline: none;
+            border-color: #3b82f6;
+            box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2);
         }
         button {
-            background-color: #007BFF;
+            background-color: #2563eb;
             color: white;
             border: none;
             cursor: pointer;
+            font-weight: 600;
+            margin-top: 0.25rem;
         }
         button:hover {
-            background-color: #0056b3;
+            background-color: #1d4ed8;
+        }
+        button:disabled {
+            background: #94a3b8;
+            cursor: not-allowed;
         }
         .output {
-            margin-top: 2rem;
+            margin-top: 1.5rem;
         }
-        .output p {
-            background: #f9f9f9;
+        .output h2 {
+            font-size: 1rem;
+            margin: 0 0 0.5rem;
+            color: #333;
+        }
+        #article-output {
+            background: #f8fafc;
             padding: 1rem;
-            border-radius: 5px;
-            border: 1px solid #ddd;
+            border-radius: 8px;
+            border: 1px solid #e2e8f0;
+            white-space: pre-wrap;
+            font-size: 0.9rem;
+            line-height: 1.5;
+            max-height: 60vh;
+            overflow: auto;
         }
         #loading {
             display: none;
             text-align: center;
-            font-size: 1.2rem;
-            color: #007BFF;
+            font-size: 0.95rem;
+            color: #2563eb;
+            margin: 0.75rem 0;
+        }
+        #error-msg {
+            display: none;
+            background: #fef2f2;
+            border: 1px solid #fecaca;
+            color: #b91c1c;
+            padding: 0.75rem;
+            border-radius: 8px;
+            font-size: 0.875rem;
+            margin-bottom: 0.75rem;
+        }
+        .row-two {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 0.75rem;
+        }
+        @media (max-width: 520px) {
+            .row-two { grid-template-columns: 1fr; }
         }
     </style>
 </head>
 <body>
     <div class="container">
         <h1>YouTube Transcript to Article</h1>
+        <div id="error-msg" role="alert"></div>
         <form id="article-form">
-            <label for="video-id">YouTube Video URL or ID:</label>
-            <input type="text" id="video-id" name="video-id" placeholder="Enter YouTube video URL or ID" required>
-            
-            <label for="detail-level">Detail Level:</label>
+            <label for="video-id">YouTube video URL or ID</label>
+            <input type="text" id="video-id" name="video-id" placeholder="https://www.youtube.com/watch?v=…" required autocomplete="off">
+
+            <label for="detail-level">Description depth</label>
             <select id="detail-level" name="detail-level">
-                <option value="summary">Brief</option>
-                <option value="detailed">Detailed</option>
+                <option value="brief">Brief — short summary and key takeaways</option>
+                <option value="standard" selected>Standard — balanced article (default)</option>
+                <option value="detailed">Detailed — in-depth professional article</option>
+                <option value="comprehensive">Comprehensive — full deep dive with structure</option>
             </select>
-            
-            <label for="target-lang">Target Language (optional):</label>
-            <input type="text" id="target-lang" name="target-lang" placeholder="e.g., en, de, fr">
-            
-            <button type="submit">Generate Article</button>
+
+            <label for="word-limit">Summarize in approximately N words <span style="font-weight:400;color:#777">(optional)</span></label>
+            <p class="hint">If set, length is prioritized (about ±10%). Leave empty to use depth setting only.</p>
+            <input type="number" id="word-limit" name="word-limit" min="1" max="50000" placeholder="e.g. 300">
+
+            <label for="target-lang">Target language <span style="font-weight:400;color:#777">(optional)</span></label>
+            <input type="text" id="target-lang" name="target-lang" placeholder="ISO code: en, de, fr…" autocomplete="off">
+
+            <div class="row-two">
+                <div>
+                    <label for="model">Model</label>
+                    <input type="text" id="model" name="model" placeholder="gpt-4o-mini" autocomplete="off">
+                </div>
+                <div>
+                    <label for="model-host">Model host</label>
+                    <select id="model-host" name="model-host">
+                        <option value="openai">OpenAI</option>
+                        <option value="localai">LocalAI (OpenAI-compatible)</option>
+                    </select>
+                </div>
+            </div>
+            <p class="hint">LocalAI: set <code>LOCALAI_BASE_URL</code> (and optional <code>LOCALAI_API_KEY</code>) on the server.</p>
+
+            <button type="submit" id="submit-btn">Generate</button>
         </form>
 
-        <div id="loading">Processing your request, please wait...</div>
+        <div id="loading">Working… this can take a minute for long videos.</div>
 
         <div class="output">
-            <h2>Generated Article</h2>
-            <p id="article-output">Your article will appear here...</p>
+            <h2>Result</h2>
+            <div id="article-output">Output will appear here.</div>
         </div>
     </div>
 
     <script>
-        document.getElementById('article-form').addEventListener('submit', async function(event) {
+        const errEl = document.getElementById('error-msg');
+        const form = document.getElementById('article-form');
+        const loading = document.getElementById('loading');
+        const out = document.getElementById('article-output');
+        const submitBtn = document.getElementById('submit-btn');
+
+        function showError(msg) {
+            errEl.textContent = msg;
+            errEl.style.display = msg ? 'block' : 'none';
+        }
+
+        fetch('/api/config')
+            .then(function (r) { return r.json(); })
+            .then(function (cfg) {
+                if (cfg.default_model) {
+                    document.getElementById('model').placeholder = cfg.default_model;
+                    document.getElementById('model').value = cfg.default_model;
+                }
+                if (cfg.default_model_host) {
+                    document.getElementById('model-host').value = cfg.default_model_host;
+                }
+            })
+            .catch(function () {});
+
+        form.addEventListener('submit', async function (event) {
             event.preventDefault();
-            const videoId = document.getElementById('video-id').value;
+            showError('');
+            const videoId = document.getElementById('video-id').value.trim();
             const detailLevel = document.getElementById('detail-level').value;
-            const targetLang = document.getElementById('target-lang').value;
+            const wordLimitRaw = document.getElementById('word-limit').value.trim();
+            const targetLang = document.getElementById('target-lang').value.trim();
+            const model = document.getElementById('model').value.trim();
+            const modelHost = document.getElementById('model-host').value;
 
-            document.getElementById('loading').style.display = 'block';
-            document.getElementById('article-output').textContent = '';
+            const payload = {
+                video_id: videoId,
+                detail_level: detailLevel,
+                model_host: modelHost
+            };
+            if (targetLang) payload.target_lang = targetLang;
+            if (model) payload.model = model;
+            if (wordLimitRaw !== '') {
+                const n = parseInt(wordLimitRaw, 10);
+                if (isNaN(n) || n < 1) {
+                    showError('Word limit must be a positive number.');
+                    return;
+                }
+                payload.word_limit = n;
+            }
 
-            const response = await fetch('/api/generate', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({ video_id: videoId, detail_level: detailLevel, target_lang: targetLang }),
-            });
+            loading.style.display = 'block';
+            out.textContent = '';
+            submitBtn.disabled = true;
 
-            const result = await response.json();
-            document.getElementById('loading').style.display = 'none';
-            document.getElementById('article-output').textContent = result.article;
+            try {
+                const response = await fetch('/api/generate', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload),
+                });
+                const result = await response.json();
+                loading.style.display = 'none';
+                submitBtn.disabled = false;
+
+                if (!response.ok) {
+                    showError(result.error || ('Request failed (' + response.status + ')'));
+                    return;
+                }
+                const title = result.video_title ? ('**' + result.video_title + '**\n\n') : '';
+                out.textContent = title + (result.article || '');
+            } catch (e) {
+                loading.style.display = 'none';
+                submitBtn.disabled = false;
+                showError('Network error: ' + (e.message || 'could not reach server'));
+            }
         });
     </script>
 </body>
