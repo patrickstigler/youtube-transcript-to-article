@@ -1,178 +1,201 @@
 
 # YouTube Transcript to Article
 
-**YouTube Transcript to Article** is a Docker-based Python project that provides an API for converting YouTube transcripts into professional articles using OpenAI's ChatGPT. This tool automates the creation of summaries or detailed articles from YouTube video content, making it easy to generate professional write-ups from video transcripts.
+Turn spoken YouTube content into structured **Markdown** you can publish, quote, or refine further. The web app and HTTP API send captions (and optional metadata) through an **OpenAI-compatible** chat model—**OpenAI** or **LocalAI**—so you control depth, length, language, and model from one place. The same container can also run as an **MCP server** that returns **transcript and video description only**, so your assistant writes the article and no API key is required inside the MCP process.
 
 ## Features
 
-- **Automatic Transcript Retrieval**: Fetches the transcript of a YouTube video in its original language, handling both video URLs and IDs.
-- **Article Generation**: Generates a professional article from the transcript, with options for brief or detailed formats.
-- **Customizable Output Language**: Allows you to specify the output language, with the default being the video's language.
-- **Minimalist Web Interface**: Provides a simple, user-friendly web interface to easily input video IDs or URLs and generate articles.
-- **Dockerized Deployment**: Easy deployment with Docker, including integration options for Home Assistant and MQTT.
+- **Transcripts**: Resolves a video from a URL or ID, fetches captions, and trims very long text to protect context limits.
+- **Depth levels**: Brief, standard, detailed, or comprehensive instructions to the model (legacy `summary` / `detailed` still accepted).
+- **Word-target summary**: Optional “approximately N words” constraint (about ±10%) for tight summaries.
+- **Model choice**: Per-request or default model name (e.g. `gpt-4o-mini`).
+- **Host choice**: OpenAI, or LocalAI (any OpenAI-compatible server) via base URL.
+- **Web UI**: Simple form at `/` with the same options as the API.
+- **MCP server**: Same image can run as a [Model Context Protocol](https://modelcontextprotocol.io/) server that exposes **transcript and/or video description/metadata only** (no LLM in the container).
 
-## MQTT Integration
+## Requirements
 
-The project includes support for MQTT, enabling integration with various IoT platforms like Home Assistant. This allows for automated processing of YouTube videos when a video link or ID is published to a specific MQTT topic.
+- Docker (optional) or Python 3.10+
+- An API key for OpenAI, or a LocalAI instance that does not require a real key (configure as needed)
 
-### MQTT Features
+## Configuration (environment variables)
 
-- **Real-Time Processing**: Automatically processes YouTube video links or IDs when published to a subscribed MQTT topic.
-- **Configurable Output**: Supports specifying `detail_level` (summary or detailed) and `target_lang` (output language) through MQTT.
-- **Automatic Responses**: Publishes the generated article to a specified MQTT topic.
-- **MQTT Authentication**: Supports username and password authentication for connecting to MQTT brokers.
-- **Home Assistant Discovery**: Automatically registers availability and last processed message sensors in Home Assistant using MQTT Discovery.
+| Variable | Description |
+|----------|-------------|
+| `OPENAI_API_KEY` | API key for OpenAI (required when using `model_host: openai`). |
+| `DEFAULT_MODEL` | Default model id if the client omits `model` (default: `gpt-4o-mini`). |
+| `DEFAULT_MODEL_HOST` | Default host if the client omits `model_host`: `openai` or `localai` (default: `openai`). |
+| `OPENAI_BASE_URL` | Optional override for OpenAI-compatible endpoints (must end with `/v1` or a path that resolves to the v1 API), e.g. proxies. |
+| `LOCALAI_BASE_URL` | Base URL for LocalAI (default: `http://localhost:8080/v1`). Used when `model_host` is `localai`. |
+| `LOCALAI_API_KEY` | Optional; falls back to `OPENAI_API_KEY` or a placeholder if unset. |
+| `OPENAI_TIMEOUT` | Seconds for model requests (default: `180`). |
+| `HTTP_REQUEST_TIMEOUT` | Seconds for scraping YouTube metadata (default: `30`). |
+| `MAX_TRANSCRIPT_CHARS` | Hard cap on transcript length sent to the model (default: `120000`). |
 
-### Environment Variables for MQTT
+### MCP (Model Context Protocol) environment
 
-Ensure the following environment variables are set in your Docker setup:
+The MCP server **does not** call OpenAI or any other LLM. It only returns YouTube **captions** and/or **title, channel, and description** from the watch page so the **host assistant** can draft an article or summary. **No `OPENAI_API_KEY` is required** for MCP.
 
-- `MQTT_ACTIVE`: Set to `true` to enable MQTT functionality.
-- `MQTT_BROKER`: The MQTT broker address (default: `localhost`).
-- `MQTT_PORT`: The port for the MQTT broker (default: `1883`).
-- `MQTT_USERNAME`: The username for MQTT authentication (optional).
-- `MQTT_PASSWORD`: The password for MQTT authentication (optional).
-- `MQTT_TOPIC_SUB`: The MQTT topic to subscribe to for incoming video links/IDs (default: `video/input`).
-- `MQTT_TOPIC_PUB`: The MQTT topic to publish the generated articles to (default: `article/output`).
-- `MQTT_CLIENT_ID`: A unique client ID for the MQTT connection.
+| Variable | Description |
+|----------|-------------|
+| `APP_MODE` | In Docker: `flask` (default) for the web app, or `mcp` to run [`mcp_server.py`](mcp_server.py). |
+| `MCP_TRANSPORT` | `stdio` (default when running `python mcp_server.py` locally) or `streamable-http` for HTTP. In Docker, the entrypoint sets `streamable-http` when `APP_MODE=mcp` unless you override. |
+| `FASTMCP_HOST` / `FASTMCP_PORT` | Bind address and port for streamable HTTP (defaults: `0.0.0.0` / `8000` when `MCP_TRANSPORT=streamable-http` at process start). |
+| `MCP_HTTP_HOST` / `MCP_HTTP_PORT` | Aliases read by the MCP server if you prefer these names. |
 
-### Example MQTT Payload
+Set `MCP_TRANSPORT` **before** starting Python so the listen address is applied correctly (e.g. `export MCP_TRANSPORT=streamable-http` then `python mcp_server.py`).
 
-To trigger the processing of a video through MQTT, publish a JSON-formatted message to the subscribed topic (`MQTT_TOPIC_SUB`):
+**Tools**
+
+- `get_youtube_transcript` — caption text plus `video_title`, `video_description`, and `channel` (JSON string).
+- `get_youtube_video_description` — title, channel, and description from the watch page only (no captions API; useful if transcripts are disabled).
+
+**Local (stdio)**
+
+```bash
+python mcp_server.py
+```
+
+**Local (HTTP)** — MCP Inspector / streamable HTTP clients:
+
+```bash
+export MCP_TRANSPORT=streamable-http
+python mcp_server.py
+# Endpoint (default path): http://127.0.0.1:8000/mcp
+```
+
+**Docker (streamable HTTP)**
+
+```bash
+docker run --rm -p 8000:8000 \
+  -e APP_MODE=mcp \
+  ghcr.io/your-org/youtube-transcript-to-article:latest
+```
+
+Point your MCP client at `http://localhost:8000/mcp` (or your host) if it supports streamable HTTP.
+
+**Docker (stdio)** — `-i` attaches stdin:
+
+```bash
+docker run --rm -i -e APP_MODE=mcp -e MCP_TRANSPORT=stdio ghcr.io/your-org/youtube-transcript-to-article:latest
+```
+
+**Cursor** — `stdio` via Docker (`-i` required):
 
 ```json
 {
-  "video_id": "YOUR_YOUTUBE_VIDEO_URL_OR_ID",
-  "detail_level": "summary", // Options: "summary", "detailed"
-  "target_lang": "en" // Optional, specify if you want a different language
+  "mcpServers": {
+    "youtube-transcript": {
+      "command": "docker",
+      "args": [
+        "run", "-i", "--rm",
+        "-e", "APP_MODE=mcp",
+        "-e", "MCP_TRANSPORT=stdio",
+        "ghcr.io/your-org/youtube-transcript-to-article:latest"
+      ]
+    }
+  }
 }
 ```
 
-The generated article will be published to the `MQTT_TOPIC_PUB` topic.
-
-### Home Assistant Integration
-
-You can easily integrate this project with Home Assistant using MQTT Discovery, which automatically configures sensors in Home Assistant to monitor the service's availability and display the last processed video and article.
-
-#### Home Assistant MQTT Discovery
-
-When MQTT is enabled, the service will automatically register the following sensors in Home Assistant:
-
-- **Service Availability**: A binary sensor that shows whether the service is online or offline.
-- **Last Processed Message**: A sensor that displays the last processed video URL and the corresponding article.
-
-### Docker Compose Example for Home Assistant Integration
-
-If you are using `docker-compose`, here’s an example configuration for integrating this service with Home Assistant:
-
-```yaml
-version: '3'
-services:
-  youtube-transcript-to-article:
-    image: patrickstigler/youtube-transcript-to-article
-    container_name: youtube_transcript_to_article
-    environment:
-      - OPENAI_API_KEY=${OPENAI_API_KEY}
-      - MQTT_ACTIVE=true
-      - MQTT_BROKER=your_mqtt_broker_address
-      - MQTT_PORT=1883
-      - MQTT_USERNAME=your_mqtt_username
-      - MQTT_PASSWORD=your_mqtt_password
-      - MQTT_TOPIC_SUB=video/input
-      - MQTT_TOPIC_PUB=article/output
-      - MQTT_CLIENT_ID=youtube_article_generator
-    ports:
-      - "5000:5000"
-```
-
-## Docker Image and Installation
-
-The Docker image for this project is available on Docker Hub:
-
-- **Docker Hub:** `patrickstigler/youtube-transcript-to-article`
-
-To pull and run the Docker image, use the following commands:
+## Docker
 
 ```bash
+# Docker Hub (replace with your namespace if different)
 docker pull patrickstigler/youtube-transcript-to-article
-docker run -p 5000:5000 patrickstigler/youtube-transcript-to-article
+docker run -p 5000:5000 -e OPENAI_API_KEY=sk-... patrickstigler/youtube-transcript-to-article
+
+# GHCR (after logging in: echo $GITHUB_TOKEN | docker login ghcr.io -u USERNAME --password-stdin)
+docker pull ghcr.io/patrickstigler/youtube-transcript-to-article:latest
+docker run -p 5000:5000 -e OPENAI_API_KEY=sk-... ghcr.io/patrickstigler/youtube-transcript-to-article:latest
 ```
 
-### unRAID Installation
+### CI: build and push
 
-This application is also available on unRAID as `youtube-transcript-to-article`. To install it on unRAID:
+Workflow: [`.github/workflows/docker-publish.yml`](.github/workflows/docker-publish.yml).
 
-1. Open the unRAID web interface.
-2. Navigate to the **Apps** tab.
-3. Search for `youtube-transcript-to-article`.
-4. Click **Install** and follow the prompts to set up the application.
+**GHCR** uses the default `GITHUB_TOKEN` (workflow permission `packages: write` is already set in the workflow).
 
-## Prerequisites
+**Docker Hub** — add these [repository secrets](https://docs.github.com/en/actions/security-guides/using-secrets-in-github-actions#creating-secrets-for-a-repository):
 
-- Docker installed on your system.
-- OpenAI API key.
+| Secret | Required | Description |
+|--------|----------|-------------|
+| `DOCKERHUB_TOKEN` | Yes, for Docker Hub | [Access token](https://hub.docker.com/settings/security) or account password |
+| `DOCKERHUB_USERNAME` | No | Defaults to your GitHub `repository_owner` if omitted |
 
-## Setup
+Tags pushed:
 
-1. **Clone the repository:**
+- `sha-<short-git-sha>` on every qualifying run
+- `latest` when the push is to the repository default branch
+- `v*` when you push a matching Git tag (e.g. `v1.0.0`)
 
-   ```bash
-   git clone https://github.com/yourusername/youtube-transcript-to-article.git
-   cd youtube-transcript-to-article
-   ```
+With Docker Compose, set `OPENAI_API_KEY` in your environment or `.env` file (see `docker-compose.yml`).
 
-2. **Set up your environment variables:**
+### LocalAI example
 
-   Ensure your OpenAI API key is set in your environment:
+Run LocalAI on the host and point the container at it:
 
-   ```bash
-   export OPENAI_API_KEY=your_openai_api_key
-   ```
+```yaml
+environment:
+  - OPENAI_API_KEY=not-needed
+  - DEFAULT_MODEL_HOST=localai
+  - LOCALAI_BASE_URL=http://host.docker.internal:8080/v1
+```
 
-3. **Build the Docker image:**
+## API
 
-   ```bash
-   docker build -t youtube-transcript-to-article .
-   ```
+### `POST /api/generate`
 
-4. **Run the Docker container:**
+JSON body:
 
-   ```bash
-   docker run -p 5000:5000 youtube-transcript-to-article
-   ```
+```json
+{
+  "video_id": "https://www.youtube.com/watch?v=VIDEO_ID or VIDEO_ID",
+  "detail_level": "standard",
+  "word_limit": 300,
+  "target_lang": "de",
+  "model": "gpt-4o-mini",
+  "model_host": "openai"
+}
+```
 
-## Usage
+- **`video_id`** (required): URL or 11-character ID.
+- **`detail_level`**: `brief` | `standard` | `detailed` | `comprehensive`. Legacy: `summary` → brief, `detailed` unchanged.
+- **`word_limit`** (optional): Positive integer; response should be about that many words.
+- **`target_lang`** (optional): ISO language code for the written output.
+- **`model`** (optional): Defaults to `DEFAULT_MODEL`.
+- **`model_host`**: `openai` | `localai` — defaults to `DEFAULT_MODEL_HOST`.
 
-### API Endpoint
+Success response includes `article`, `video_id`, `video_title`, `video_description` (watch-page text, best-effort), `detail_level`, `model`, and `model_host`. Errors return JSON `{ "error": "..." }` with appropriate HTTP status (400, 404, 422, 429, 502, 503).
 
-- **URL:** `http://localhost:5000/api/generate`
-- **Method:** `POST`
-- **Payload Example:**
+### `POST /api/transcript`
 
-  ```json
-  {
-    "video_id": "YOUR_YOUTUBE_VIDEO_URL_OR_ID",
-    "detail_level": "summary", // Options: "summary", "detailed"
-    "target_lang": "en" // Optional, specify if you want a different language
-  }
-  ```
+Returns raw transcript text for a video (same `video_id` / `target_lang` as before), plus `video_title` and `video_description`.
 
-- **Response Example:**
+### `GET /api/config`
 
-  ```json
-  {
-    "article": "Generated article text here..."
-  }
-  ```
+Public defaults for the web UI (model name, host, allowed detail levels). No secrets.
 
-### Web Interface
+## Local development
 
-Access the minimalist web interface by navigating to `http://localhost:5000` in your browser. Here, you can input the YouTube video URL or ID, choose the detail level, and specify a target language if desired.
+```bash
+python -m venv .venv
+source .venv/bin/activate   # Windows: .venv\Scripts\activate
+pip install -r requirements.txt
+export OPENAI_API_KEY=sk-...
+python app.py
+```
+
+MCP (no API key): `python mcp_server.py`
+
+Open `http://127.0.0.1:5000` for the web UI.
+
+The app is also available on unRAID Community Apps as `youtube-transcript-to-article`.
 
 ## License
 
-This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for details.
+This project uses the [MIT License](LICENSE).
 
 ## Contributing
 
-Contributions are welcome! Please feel free to submit a Pull Request or open an issue.
+Contributions are welcome. Please open an issue or pull request.

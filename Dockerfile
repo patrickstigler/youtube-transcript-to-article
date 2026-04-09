@@ -15,8 +15,11 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Copy the rest of the application
 COPY . .
 
-# Expose the port
-EXPOSE 5000
+RUN chmod +x docker-entrypoint.sh
 
-# Run the Flask application
-CMD ["python", "app.py"]
+# 5000: Flask web UI / API — 8000: MCP streamable-http (when APP_MODE=mcp + MCP_TRANSPORT=streamable-http)
+EXPOSE 5000 8000
+
+ENV APP_MODE=flask
+
+ENTRYPOINT ["./docker-entrypoint.sh"]
