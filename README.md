@@ -70,7 +70,7 @@ python mcp_server.py
 ```bash
 docker run --rm -p 8000:8000 \
   -e APP_MODE=mcp \
-  ghcr.io/your-org/youtube-transcript-to-article:latest
+  ghcr.io/patrickstigler/youtube-transcript-to-article:latest
 ```
 
 Point your MCP client at `http://localhost:8000/mcp` (or your host) if it supports streamable HTTP.
@@ -78,7 +78,7 @@ Point your MCP client at `http://localhost:8000/mcp` (or your host) if it suppor
 **Docker (stdio)** — `-i` attaches stdin:
 
 ```bash
-docker run --rm -i -e APP_MODE=mcp -e MCP_TRANSPORT=stdio ghcr.io/your-org/youtube-transcript-to-article:latest
+docker run --rm -i -e APP_MODE=mcp -e MCP_TRANSPORT=stdio ghcr.io/patrickstigler/youtube-transcript-to-article:latest
 ```
 
 **Cursor** — `stdio` via Docker (`-i` required):
@@ -92,7 +92,7 @@ docker run --rm -i -e APP_MODE=mcp -e MCP_TRANSPORT=stdio ghcr.io/your-org/youtu
         "run", "-i", "--rm",
         "-e", "APP_MODE=mcp",
         "-e", "MCP_TRANSPORT=stdio",
-        "ghcr.io/your-org/youtube-transcript-to-article:latest"
+        "ghcr.io/patrickstigler/youtube-transcript-to-article:latest"
       ]
     }
   }
