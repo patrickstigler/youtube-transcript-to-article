@@ -1,6 +1,6 @@
 
 # YouTube Transcript to Article
-
+[![Ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/W7W51C9X4H)
 Turn spoken YouTube content into structured **Markdown** you can publish, quote, or refine further. The web app and HTTP API send captions (and optional metadata) through an **OpenAI-compatible** chat model—**OpenAI** or **LocalAI**—so you control depth, length, language, and model from one place. The same container can also run as an **MCP server** that returns **transcript and video description only**, so your assistant writes the article and no API key is required inside the MCP process.
 
 ## Features
