@@ -1,8 +1,11 @@
 # Build the Docker image and push to GitHub Container Registry (GHCR) and Docker Hub.
 #
-# GHCR: uses GITHUB_TOKEN — enable "Packages" write permission (see permissions below).
-# Docker Hub: add repository secrets DOCKERHUB_TOKEN (required) and optionally
-# DOCKERHUB_USERNAME if your Docker Hub login differs from your GitHub username.
+# GHCR: uses GITHUB_TOKEN — requires `packages: write` (set below at workflow level).
+# If push still fails with write_package: repo Settings → Actions → General → Workflow
+# permissions → "Read and write permissions"; and on the GHCR package → Package settings
+# → "Manage Actions access" → add this repo with Role: Write (or link the package to the repo).
+#
+# Docker Hub: repository secrets DOCKERHUB_TOKEN (optional) and DOCKERHUB_USERNAME if needed.
 
 name: Publish Docker image
 
@@ -15,15 +18,14 @@ on:
       - 'v*'
   workflow_dispatch:
 
-env:
-  IMAGE_NAME: youtube-transcript-to-article
+# Workflow-level permissions so GITHUB_TOKEN can push to GHCR (not only job-level).
+permissions:
+  contents: read
+  packages: write
 
 jobs:
   build-and-push:
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      packages: write
 
     steps:
       - name: Checkout
@@ -64,8 +66,11 @@ jobs:
           DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
         run: |
           set -euo pipefail
-          GHCR="ghcr.io/$(echo '${{ github.repository }}' | tr '[:upper:]' '[:lower:]')"
-          DH="$(echo '${{ github.repository_owner }}' | tr '[:upper:]' '[:lower:]')/${{ env.IMAGE_NAME }}"
+          # GHCR image = ghcr.io/<lowercase owner>/<lowercase repo name> (must match GitHub’s expected path).
+          OWNER="$(echo '${{ github.repository_owner }}' | tr '[:upper:]' '[:lower:]')"
+          REPO="$(echo '${{ github.event.repository.name }}' | tr '[:upper:]' '[:lower:]')"
+          GHCR="ghcr.io/${OWNER}/${REPO}"
+          DH="${OWNER}/${REPO}"
           SHA_SHORT="$(echo '${{ github.sha }}' | cut -c1-7)"
           SHA_TAG="sha-${SHA_SHORT}"
 
