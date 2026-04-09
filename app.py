@@ -5,21 +5,40 @@ import logging
 import html as html_module
 import requests
 from bs4 import BeautifulSoup
-from flask import Flask, request, jsonify, render_template
+from flask import Flask, redirect, request, jsonify, render_template
 from openai import OpenAI, APIError, APITimeoutError
 from youtube_transcript_api import (
     YouTubeTranscriptApi,
+    CouldNotRetrieveTranscript,
+    IpBlocked,
     NoTranscriptFound,
+    RequestBlocked,
     TranscriptsDisabled,
     VideoUnavailable,
     InvalidVideoId,
-    TooManyRequests,
 )
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 app = Flask(__name__)
+
+
+@app.before_request
+def _redirect_add_trailing_slash():
+    """Canonical URLs use a trailing slash for page GETs (not /api, not static files)."""
+    if request.method != "GET":
+        return None
+    p = request.path
+    if p.startswith(("/api", "/static")):
+        return None
+    if p == "/" or p.endswith("/"):
+        return None
+    last_segment = p.rstrip("/").rsplit("/", 1)[-1]
+    if "." in last_segment:
+        return None
+    return redirect(p + "/", code=308)
+
 
 REQUEST_TIMEOUT = float(os.getenv("HTTP_REQUEST_TIMEOUT", "30"))
 OPENAI_TIMEOUT = float(os.getenv("OPENAI_TIMEOUT", "180"))
@@ -150,18 +169,21 @@ def get_video_info_scrape(video_id: str) -> dict:
 
 
 def get_transcript(video_id: str, target_lang: str | None = None) -> str:
-    """Fetch transcript text for the video."""
-    try:
-        if target_lang:
-            transcript = YouTubeTranscriptApi.get_transcript(video_id, languages=[target_lang])
-        else:
-            transcript = YouTubeTranscriptApi.get_transcript(video_id)
-    except NoTranscriptFound:
-        transcript_list = YouTubeTranscriptApi.list_transcripts(video_id)
-        available = [t.language_code for t in transcript_list]
-        transcript = YouTubeTranscriptApi.get_transcript(video_id, languages=available)
+    """Fetch transcript text for the video (youtube-transcript-api v1.x)."""
+    api = YouTubeTranscriptApi()
+    if target_lang:
+        ft = api.fetch(video_id, languages=[target_lang])
+    else:
+        try:
+            ft = api.fetch(video_id, languages=["en"])
+        except NoTranscriptFound:
+            tlist = api.list(video_id)
+            transcripts = list(tlist)
+            if not transcripts:
+                raise
+            ft = transcripts[0].fetch()
 
-    text = " ".join(t["text"] for t in transcript)
+    text = " ".join(snippet.text for snippet in ft)
     if len(text) > MAX_TRANSCRIPT_CHARS:
         text = text[:MAX_TRANSCRIPT_CHARS] + "\n\n[Transcript truncated for length.]"
     return text
@@ -303,8 +325,18 @@ def generate():
         return jsonify({"error": "Transcripts/captions are disabled for this video"}), 422
     except NoTranscriptFound:
         return jsonify({"error": "No transcript could be found for this video"}), 422
-    except TooManyRequests:
-        return jsonify({"error": "YouTube rate limit reached; try again shortly"}), 429
+    except (IpBlocked, RequestBlocked):
+        return jsonify({"error": "YouTube rate limit or IP block; try again later or another network"}), 429
+    except CouldNotRetrieveTranscript as e:
+        logger.warning("YouTube captions: %s", e)
+        return jsonify(
+            {
+                "error": (
+                    "YouTube did not return usable caption data (blocked, empty response, or restricted video). "
+                    "Try target_lang if only one language exists, retry later, or use proxies on cloud IPs."
+                )
+            }
+        ), 422
     except RuntimeError as e:
         return jsonify({"error": str(e)}), 502
     except Exception as e:
@@ -352,8 +384,18 @@ def transcript():
         return jsonify({"error": "Transcripts/captions are disabled for this video"}), 422
     except NoTranscriptFound:
         return jsonify({"error": "No transcript could be found for this video"}), 422
-    except TooManyRequests:
-        return jsonify({"error": "YouTube rate limit reached; try again shortly"}), 429
+    except (IpBlocked, RequestBlocked):
+        return jsonify({"error": "YouTube rate limit or IP block; try again later or another network"}), 429
+    except CouldNotRetrieveTranscript as e:
+        logger.warning("YouTube captions: %s", e)
+        return jsonify(
+            {
+                "error": (
+                    "YouTube did not return usable caption data (blocked, empty response, or restricted video). "
+                    "Try target_lang if only one language exists, retry later, or use proxies on cloud IPs."
+                )
+            }
+        ), 422
     except Exception as e:
         logger.exception("Transcript fetch failed")
         return jsonify({"error": str(e)}), 502

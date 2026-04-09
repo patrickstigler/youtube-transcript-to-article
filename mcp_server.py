@@ -21,8 +21,10 @@ from mcp.server.fastmcp import FastMCP
 
 from app import extract_video_id, get_transcript, get_video_info_scrape, is_valid_youtube_video_id
 from youtube_transcript_api import (
+    CouldNotRetrieveTranscript,
+    IpBlocked,
     NoTranscriptFound,
-    TooManyRequests,
+    RequestBlocked,
     TranscriptsDisabled,
     VideoUnavailable,
     InvalidVideoId,
@@ -91,8 +93,18 @@ def get_youtube_transcript(video_id: str, target_lang: str | None = None) -> str
         return json.dumps({"error": "Transcripts/captions are disabled for this video"})
     except NoTranscriptFound:
         return json.dumps({"error": "No transcript could be found for this video"})
-    except TooManyRequests:
-        return json.dumps({"error": "YouTube rate limit reached; try again shortly"})
+    except (IpBlocked, RequestBlocked):
+        return json.dumps({"error": "YouTube rate limit or IP block; try again later"})
+    except CouldNotRetrieveTranscript as e:
+        logger.warning("YouTube captions: %s", e)
+        return json.dumps(
+            {
+                "error": (
+                    "YouTube did not return usable caption data. "
+                    "Try target_lang, retry later, or use another network if blocked."
+                )
+            }
+        )
     except Exception as e:
         logger.exception("get_youtube_transcript failed")
         return json.dumps({"error": str(e)})

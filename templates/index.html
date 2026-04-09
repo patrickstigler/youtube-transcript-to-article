@@ -115,6 +115,18 @@
         @media (max-width: 520px) {
             .row-two { grid-template-columns: 1fr; }
         }
+        .hidden {
+            display: none !important;
+        }
+        .transcript-note {
+            font-size: 0.8rem;
+            color: #059669;
+            background: #ecfdf5;
+            border: 1px solid #a7f3d0;
+            padding: 0.5rem 0.65rem;
+            border-radius: 8px;
+            margin-bottom: 0.85rem;
+        }
     </style>
 </head>
 <body>
@@ -122,38 +134,52 @@
         <h1>YouTube Transcript to Article</h1>
         <div id="error-msg" role="alert"></div>
         <form id="article-form">
+            <label for="output-mode">What do you want?</label>
+            <select id="output-mode" name="output-mode">
+                <option value="article" selected>Article (uses your LLM — needs API key on server)</option>
+                <option value="transcript">Plain transcript + video description (no API key)</option>
+            </select>
+
             <label for="video-id">YouTube video URL or ID</label>
             <input type="text" id="video-id" name="video-id" placeholder="https://www.youtube.com/watch?v=…" required autocomplete="off">
 
-            <label for="detail-level">Description depth</label>
-            <select id="detail-level" name="detail-level">
-                <option value="brief">Brief — short summary and key takeaways</option>
-                <option value="standard" selected>Standard — balanced article (default)</option>
-                <option value="detailed">Detailed — in-depth professional article</option>
-                <option value="comprehensive">Comprehensive — full deep dive with structure</option>
-            </select>
-
-            <label for="word-limit">Summarize in approximately N words <span style="font-weight:400;color:#777">(optional)</span></label>
-            <p class="hint">If set, length is prioritized (about ±10%). Leave empty to use depth setting only.</p>
-            <input type="number" id="word-limit" name="word-limit" min="1" max="50000" placeholder="e.g. 300">
-
-            <label for="target-lang">Target language <span style="font-weight:400;color:#777">(optional)</span></label>
-            <input type="text" id="target-lang" name="target-lang" placeholder="ISO code: en, de, fr…" autocomplete="off">
-
-            <div class="row-two">
-                <div>
-                    <label for="model">Model</label>
-                    <input type="text" id="model" name="model" placeholder="gpt-4o-mini" autocomplete="off">
-                </div>
-                <div>
-                    <label for="model-host">Model host</label>
-                    <select id="model-host" name="model-host">
-                        <option value="openai">OpenAI</option>
-                        <option value="localai">LocalAI (OpenAI-compatible)</option>
-                    </select>
-                </div>
+            <div id="transcript-note" class="transcript-note hidden">
+                Fetches captions and the description from the watch page only. No OpenAI or LocalAI call.
             </div>
-            <p class="hint">LocalAI: set <code>LOCALAI_BASE_URL</code> (and optional <code>LOCALAI_API_KEY</code>) on the server.</p>
+
+            <div id="llm-options">
+                <label for="detail-level">Description depth</label>
+                <select id="detail-level" name="detail-level">
+                    <option value="brief">Brief — short summary and key takeaways</option>
+                    <option value="standard" selected>Standard — balanced article (default)</option>
+                    <option value="detailed">Detailed — in-depth professional article</option>
+                    <option value="comprehensive">Comprehensive — full deep dive with structure</option>
+                </select>
+
+                <label for="word-limit">Summarize in approximately N words <span style="font-weight:400;color:#777">(optional)</span></label>
+                <p class="hint">If set, length is prioritized (about ±10%). Leave empty to use depth setting only.</p>
+                <input type="number" id="word-limit" name="word-limit" min="1" max="50000" placeholder="e.g. 300">
+
+                <div class="row-two">
+                    <div>
+                        <label for="model">Model</label>
+                        <input type="text" id="model" name="model" placeholder="gpt-4o-mini" autocomplete="off">
+                    </div>
+                    <div>
+                        <label for="model-host">Model host</label>
+                        <select id="model-host" name="model-host">
+                            <option value="openai">OpenAI</option>
+                            <option value="localai">LocalAI (OpenAI-compatible)</option>
+                        </select>
+                    </div>
+                </div>
+                <p class="hint">LocalAI: set <code>LOCALAI_BASE_URL</code> (and optional <code>LOCALAI_API_KEY</code>) on the server.</p>
+            </div>
+
+            <label for="target-lang">Caption / output language <span style="font-weight:400;color:#777">(optional)</span></label>
+            <p class="hint" id="target-lang-hint-article">ISO code for the written article, e.g. en, de, fr.</p>
+            <p class="hint hidden" id="target-lang-hint-transcript">Prefer captions in this language if available (e.g. <code>de</code> when only German auto-captions exist).</p>
+            <input type="text" id="target-lang" name="target-lang" placeholder="e.g. en, de, fr" autocomplete="off">
 
             <button type="submit" id="submit-btn">Generate</button>
         </form>
@@ -161,7 +187,7 @@
         <div id="loading">Working… this can take a minute for long videos.</div>
 
         <div class="output">
-            <h2>Result</h2>
+            <h2 id="output-heading">Result</h2>
             <div id="article-output">Output will appear here.</div>
         </div>
     </div>
@@ -172,11 +198,30 @@
         const loading = document.getElementById('loading');
         const out = document.getElementById('article-output');
         const submitBtn = document.getElementById('submit-btn');
+        const outputMode = document.getElementById('output-mode');
+        const llmOptions = document.getElementById('llm-options');
+        const transcriptNote = document.getElementById('transcript-note');
+        const outputHeading = document.getElementById('output-heading');
+        const hintArticle = document.getElementById('target-lang-hint-article');
+        const hintTranscript = document.getElementById('target-lang-hint-transcript');
 
         function showError(msg) {
             errEl.textContent = msg;
             errEl.style.display = msg ? 'block' : 'none';
         }
+
+        function applyOutputMode() {
+            const tr = outputMode.value === 'transcript';
+            llmOptions.classList.toggle('hidden', tr);
+            transcriptNote.classList.toggle('hidden', !tr);
+            hintArticle.classList.toggle('hidden', tr);
+            hintTranscript.classList.toggle('hidden', !tr);
+            submitBtn.textContent = tr ? 'Fetch transcript' : 'Generate';
+            outputHeading.textContent = tr ? 'Transcript & description' : 'Article';
+            loading.textContent = tr ? 'Fetching captions from YouTube…' : 'Working… this can take a minute for long videos.';
+        }
+
+        outputMode.addEventListener('change', applyOutputMode);
 
         fetch('/api/config')
             .then(function (r) { return r.json(); })
@@ -191,37 +236,70 @@
             })
             .catch(function () {});
 
+        applyOutputMode();
+
         form.addEventListener('submit', async function (event) {
             event.preventDefault();
             showError('');
             const videoId = document.getElementById('video-id').value.trim();
-            const detailLevel = document.getElementById('detail-level').value;
-            const wordLimitRaw = document.getElementById('word-limit').value.trim();
             const targetLang = document.getElementById('target-lang').value.trim();
-            const model = document.getElementById('model').value.trim();
-            const modelHost = document.getElementById('model-host').value;
-
-            const payload = {
-                video_id: videoId,
-                detail_level: detailLevel,
-                model_host: modelHost
-            };
-            if (targetLang) payload.target_lang = targetLang;
-            if (model) payload.model = model;
-            if (wordLimitRaw !== '') {
-                const n = parseInt(wordLimitRaw, 10);
-                if (isNaN(n) || n < 1) {
-                    showError('Word limit must be a positive number.');
-                    return;
-                }
-                payload.word_limit = n;
-            }
+            const transcriptOnly = outputMode.value === 'transcript';
 
             loading.style.display = 'block';
             out.textContent = '';
             submitBtn.disabled = true;
 
             try {
+                if (transcriptOnly) {
+                    const payload = { video_id: videoId };
+                    if (targetLang) payload.target_lang = targetLang;
+                    const response = await fetch('/api/transcript', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(payload),
+                    });
+                    const result = await response.json();
+                    loading.style.display = 'none';
+                    submitBtn.disabled = false;
+                    if (!response.ok) {
+                        showError(result.error || ('Request failed (' + response.status + ')'));
+                        return;
+                    }
+                    let text = '';
+                    if (result.video_title) {
+                        text += '**' + result.video_title + '**\n\n';
+                    }
+                    if (result.video_description) {
+                        text += '*Description (from video page):*\n' + result.video_description + '\n\n---\n\n';
+                    }
+                    text += '*Transcript:*\n' + (result.transcript || '');
+                    out.textContent = text;
+                    return;
+                }
+
+                const detailLevel = document.getElementById('detail-level').value;
+                const wordLimitRaw = document.getElementById('word-limit').value.trim();
+                const model = document.getElementById('model').value.trim();
+                const modelHost = document.getElementById('model-host').value;
+
+                const payload = {
+                    video_id: videoId,
+                    detail_level: detailLevel,
+                    model_host: modelHost
+                };
+                if (targetLang) payload.target_lang = targetLang;
+                if (model) payload.model = model;
+                if (wordLimitRaw !== '') {
+                    const n = parseInt(wordLimitRaw, 10);
+                    if (isNaN(n) || n < 1) {
+                        loading.style.display = 'none';
+                        submitBtn.disabled = false;
+                        showError('Word limit must be a positive number.');
+                        return;
+                    }
+                    payload.word_limit = n;
+                }
+
                 const response = await fetch('/api/generate', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
